@@ -1,0 +1,16 @@
+PODS:
+  - LWWebLoader (0.1.0)
+
+DEPENDENCIES:
+  - LWWebLoader (from `../`)
+
+EXTERNAL SOURCES:
+  LWWebLoader:
+    :path: "../"
+
+SPEC CHECKSUMS:
+  LWWebLoader: ef2d258f437a691c75e856ae7e38a536f798aeb2
+
+PODFILE CHECKSUM: 40991c0a39d60ae209f8f19476b83c490972bae1
+
+COCOAPODS: 1.8.4
