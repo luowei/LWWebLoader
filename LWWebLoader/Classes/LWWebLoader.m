@@ -118,11 +118,19 @@ static WKProcessPool *_pool;
 
 
 @interface LWWLWKScriptMessageHandler : NSObject <WKScriptMessageHandler>
+@property(nonatomic, strong) NSMutableData *dataToDownload;
 @end
 @implementation LWWLWKScriptMessageHandler
 
 - (void)dealloc {
     WLLog(@"===========dealloc LWWLWKScriptMessageHandler ");
+}
+
+-(NSMutableData *)dataToDownload{
+    if(!_dataToDownload){
+        _dataToDownload = [[NSMutableData alloc] init];
+    }
+    return _dataToDownload;
 }
 
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
@@ -143,9 +151,24 @@ static WKProcessPool *_pool;
             WLLog(@"=====writeToFile 失败");
         }
 
-    }else if([message.name isEqualToString:@"b64streamtext"]) {
+    }else if([message.name isEqualToString:@"b64streamstart"]) {
+        WLLog(@"=====b64 streaming start !");
+        self.dataToDownload = [[NSMutableData alloc] init];
+
+    }else if([message.name isEqualToString:@"b64streaming"]) {
+        WLLog(@"=====b64 streaming ...");
+        NSData *data = [[NSData alloc] initWithBase64EncodedString:message.body options:0];
+        [self.dataToDownload appendData:data];
 
     }else if([message.name isEqualToString:@"b64streamend"]) {
+        WLLog(@"=====b64 streaming finish !");
+        NSString *homePath = [NSHomeDirectory() stringByAppendingPathComponent:@"aaaa"];
+        BOOL ok = [self.dataToDownload writeToFile:homePath atomically:YES];
+        if(ok){
+            WLLog(@"=====writeToFile:%@",homePath);
+        }else{
+            WLLog(@"=====writeToFile 失败");
+        }
 
     }else if([message.name isEqualToString:@"nativelog"]){
         WLLog(@"=====nativelog:%@",message.body);
@@ -194,6 +217,9 @@ static WKProcessPool *_pool;
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"jsontext"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"plaintext"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64text"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamstart"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streaming"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamend"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"nativelog"];
 
     WLWebView *webView = [[WLWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:webConfiguration];

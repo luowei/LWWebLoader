@@ -408,10 +408,13 @@
                 window.writer = fileStream.getWriter();
 
                 const reader = res.body.getReader();
+                window.webkit.messageHandlers.b64streamstart.postMessage('');
                 const pump = () => reader.read()
                     .then(response => {
                         if (response.done) {
                             writer.close();
+                            window.webkit.messageHandlers.b64streamend.postMessage('');
+
                         } else { // value for fetch streams is a Uint8Array
                             //参考：
                             // iOS二进制数据与js的透传：https://www.jianshu.com/p/0d3f4511778c
@@ -421,7 +424,7 @@
                             // let b64encoded = btoa(decoder.decode(response.value));
                             // let b64encoded = btoa(String.fromCharCode.apply(null, response.value));
                             let b64encoded = btoa(Uint8ToString(response.value));
-                            window.webkit.messageHandlers.b64text.postMessage(b64encoded);
+                            window.webkit.messageHandlers.b64streaming.postMessage(b64encoded);
                             writer.write(response.value).then(pump)
                         }
                     })
