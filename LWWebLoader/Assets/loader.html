@@ -172,10 +172,6 @@
                         .replace(/['()]/g, escape)
                         .replace(/\*/g, '%2A')
 
-
-                    console.log('=====pathname:'+(opts.pathname || Math.random().toString().slice(-6) + '/' + filename) )
-                    window.webkit.messageHandlers.lwwebloader.postMessage('====aaaa:'+(opts.pathname || Math.random().toString().slice(-6) + '/' + filename));
-
                     const response = {
                         transferringReadable: supportsTransferable,
                         pathname: opts.pathname || Math.random().toString().slice(-6) + '/' + filename,
@@ -310,70 +306,10 @@
             }
 
             return streamSaver
-        })
-
-
-        // 参考：
-        // https://www.jianshu.com/p/b8c3a82f9ba4
-        // https://github.com/jimmywarting/StreamSaver.js
-        // https://juejin.im/post/59f6ec44f265da43252895be
-
-
-/*        hookAjax({
-            onreadystatechange: function (xhr) {
-                console.log("onreadystatechange called: %O", xhr)
-                //return true
-            },
-            onload: function (xhr) {
-                console.log("onload called: %O", xhr)
-                xhr.responseText = "hook" + xhr.responseText;
-                //return true;
-            },
-            open: function (arg, xhr) {
-                console.log("open called: method:%s,url:%s,async:%s", arg[0], arg[1], arg[2], xhr)
-                arg[1] += "?hook_tag=1";
-                //统一添加请求头
-            },
-            send: function (arg, xhr) {
-                console.log("send called: %O", arg[0])
-                xhr.setRequestHeader("_custom_header_", "ajaxhook")
-            },
-            setRequestHeader: function (arg, xhr) {
-                console.log("setRequestHeader called!", arg)
-            },
-            // hook attributes of XMLHttpRequest object
-            timeout: {
-                setter: function (v, xhr) {
-                    //timeout shouldn't exceed 10s
-                    return Math.max(v, 1000);
-                }
-            }
-        }) ;*/
-/*
-        hookAjax({
-            //拦截方法
-            open: function (arg, xhr) {
-                console.log("open called: method:%s,url:%s,async:%s", arg[0], arg[1], arg[2]);
-                var method = arg[0];
-                var url = arg[1];
-                var async = arg[2];
-                _XHR.cacheXHRIfNeed(this);
-                window.KKJSBridge.call(_XHR.moduleName, 'open', {
-                    "id": this.id,
-                    "method": method,
-                    "url": url,
-                    "scheme": window.location.protocol,
-                    "host": window.location.hostname,
-                    "port": window.location.port,
-                    "href": window.location.href,
-                    "referer": document.referrer != "" ? document.referrer : null,
-                    "useragent": navigator.userAgent,
-                    "async": async
-                });
-                return true;
-            }
         });
-*/
+
+
+
 
         //GET
         //参考: https://developer.mozilla.org/zh-TW/docs/Web/API/Fetch_API/Using_Fetch
@@ -389,7 +325,7 @@
             }).then(response => {
                 console.log('Success:', response);
                 response.requestId = requestId;
-                window.webkit.messageHandlers.lwwebloader.postMessage(response);
+                window.webkit.messageHandlers.jsontext.postMessage(response);
             });
 
         }
@@ -407,18 +343,52 @@
             }).then(response => {
                 console.log('Success:', response);
                 response.requestId = requestId;
-                window.webkit.messageHandlers.lwwebloader.postMessage(response);
+                window.webkit.messageHandlers.jsontext.postMessage(response);
             });
 
         }
 
-        function downloadRequest(requestId, url, requestInit) {
+        //Upload Json Data
+        function uploadJson(requestId, url, data) {
+            fetch(url, {
+                method: 'POST', // or 'PUT'
+                body: JSON.stringify(data), // data can be `string` or {object}!
+                headers: new Headers({
+                    'Content-Type': 'application/json'
+                })
+            }).then(res => {
+                return res.json();
+
+            }).catch(error => {
+                console.error('Error:', error);
+                return error;
+
+            }).then(response => {
+                console.log('Success:', response);
+                window.webkit.messageHandlers.jsontext.postMessage(response);
+
+            });
+        }
+
+        /**
+         * @return {string}
+         */
+        function Uint8ToString(u8a){
+            let CHUNK_SZ = 0x8000;
+            let c = [];
+            for (let i=0; i < u8a.length; i+=CHUNK_SZ) {
+                c.push(String.fromCharCode.apply(null, u8a.subarray(i, i+CHUNK_SZ)));
+            }
+            return c.join("");
+        }
+
+        function downloadData(requestId, url, requestInit) {
             // const fileStream = streamSaver.createWriteStream(requestId);
             const fileStream = streamSaver.createWriteStream(requestId, {
                 size: 22, // (optional) Will show progress
                 writableStrategy: undefined, // (optional)
                 readableStrategy: undefined  // (optional)
-            })
+            });
 
             fetch(url,requestInit).then(res => {
                 const readableStream = res.body;
@@ -442,7 +412,16 @@
                     .then(response => {
                         if (response.done) {
                             writer.close();
-                        } else {
+                        } else { // value for fetch streams is a Uint8Array
+                            //参考：
+                            // iOS二进制数据与js的透传：https://www.jianshu.com/p/0d3f4511778c
+                            // convert uint8 Array to base64 Encoded String : https://stackoverflow.com/questions/12710001/how-to-convert-uint8-array-to-base64-encoded-string
+                            //
+                            // let decoder = new TextDecoder('utf8');
+                            // let b64encoded = btoa(decoder.decode(response.value));
+                            // let b64encoded = btoa(String.fromCharCode.apply(null, response.value));
+                            let b64encoded = btoa(Uint8ToString(response.value));
+                            window.webkit.messageHandlers.b64text.postMessage(b64encoded);
                             writer.write(response.value).then(pump)
                         }
                     })
@@ -460,10 +439,11 @@
 
         }
 
-        function downloadFile2() {
+        function downloadFile() {
 
             fetch('http://mytest.com/test.zip').then(res => {
-                res.blob()
+                return res.blob();
+
             }).then(blob => {
                 let a = document.createElement('a');
                 let url = window.URL.createObjectURL(blob);
@@ -476,136 +456,6 @@
             });
 
         }
-
-        window.downloadFile = function(sUrl = 'http://mytest.com/test.zip') {
-
-            //If in Chrome or Safari - download via virtual link click
-            if (window.downloadFile.isChrome || window.downloadFile.isSafari) {
-                //Creating new link node.
-                var link = document.createElement('a');
-                link.href = sUrl;
-
-                if (link.download !== undefined){
-                    //Set HTML5 download attribute. This will prevent file from opening if supported.
-                    var fileName = sUrl.substring(sUrl.lastIndexOf('/') + 1, sUrl.length);
-                    link.download = fileName;
-                }
-
-                //Dispatching click event.
-                if (document.createEvent) {
-                    var e = document.createEvent('MouseEvents');
-                    e.initEvent('click' ,true ,true);
-                    link.dispatchEvent(e);
-                    return true;
-                }
-            }
-
-            // Force file download (whether supported by server).
-            var query = '?download';
-
-            window.open(sUrl + query);
-        };
-        window.downloadFile.isChrome = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
-        // window.downloadFile.isSafari = navigator.userAgent.toLowerCase().indexOf('safari') > -1;
-        window.downloadFile.isSafari = navigator.userAgent.toLowerCase().indexOf('applewebkit') > -1;
-
-
-
-        function SaveToDisk(fileURL = 'http://mytest.com/test.zip', fileName = 'test3.zip') {
-            // for non-IE
-            if (!window.ActiveXObject) {
-                var save = document.createElement('a');
-                save.href = fileURL;
-                save.download = fileName || 'unknown';
-                save.style = 'display:none;opacity:0;color:transparent;';
-                (document.body || document.documentElement).appendChild(save);
-
-                if (typeof save.click === 'function') {
-                    save.click();
-                } else {
-                    save.target = '_blank';
-                    var event = document.createEvent('Event');
-                    event.initEvent('click', true, true);
-                    save.dispatchEvent(event);
-                }
-
-                (window.URL || window.webkitURL).revokeObjectURL(save.href);
-            }
-
-            // for IE
-            else if (!!window.ActiveXObject && document.execCommand) {
-                var _window = window.open(fileURL, '_blank');
-                _window.document.close();
-                _window.document.execCommand('SaveAs', true, fileName || fileURL)
-                _window.close();
-            }
-        }
-
-
-        //Upload Json Data
-        function uploadJson(requestId, url, data) {
-            fetch(url, {
-                method: 'POST', // or 'PUT'
-                body: JSON.stringify(data), // data can be `string` or {object}!
-                headers: new Headers({
-                    'Content-Type': 'application/json'
-                })
-            }).then(res => {
-                return res.json();
-
-            }).catch(error => {
-                console.error('Error:', error);
-                return error;
-
-            }).then(response => {
-                console.log('Success:', response);
-            });
-        }
-
-
-
-
-
-/*
-        var fly = new Fly;
-        // //定义公共headers
-        // fly.config.headers = {xx: 5, bb: 6, dd: 7};
-        // //设置超时
-        // fly.config.timeout = 10000;
-        // //设置请求基地址
-        // fly.config.baseURL = "https://wendux.github.io/";
-        // //设置公共的Get参数
-        // fly.config.params = {"token": "testtoken"};
-
-        async function getRequest(requestId, url) {
-            let response = await fly.get(url)
-                .then(function (response) {
-                    return response;
-                })
-                .catch(function (error) {
-                    return error;
-                });
-
-            response.requestId = requestId;
-            window.webkit.messageHandlers.lwwebloader.postMessage(JSON.parse(JSON.stringify(response)));
-            return null;
-        }
-
-        async function postReuest(requestId, url,param) {
-            let response = await fly.post(url, param)
-                .then(function (response) {
-                    return response;
-                })
-                .catch(function (error) {
-                    return error;
-                });
-
-            response.requestId = requestId;
-            window.webkit.messageHandlers.lwwebloader.postMessage(JSON.parse(JSON.stringify(response)));
-            return null;
-        }
-*/
-
 
 
 

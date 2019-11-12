@@ -38,19 +38,19 @@
 
     UIButton *btn1 = [UIButton buttonWithType:UIButtonTypeSystem];
     btn1.frame = CGRectMake(100, 150, 160, 40);
-    [btn1 setTitle:@"getRequest" forState:UIControlStateNormal];
+    [btn1 setTitle:@"getData" forState:UIControlStateNormal];
     [self.view addSubview:btn1];
     [btn1 addTarget:self action:@selector(getBtnAction) forControlEvents:UIControlEventTouchUpInside];
 
     UIButton *btn2 = [UIButton buttonWithType:UIButtonTypeSystem];
     btn2.frame = CGRectMake(100, 200, 160, 40);
-    [btn2 setTitle:@"postRequest" forState:UIControlStateNormal];
+    [btn2 setTitle:@"postData" forState:UIControlStateNormal];
     [self.view addSubview:btn2];
     [btn2 addTarget:self action:@selector(postBtnAction) forControlEvents:UIControlEventTouchUpInside];
 
     UIButton *btn3 = [UIButton buttonWithType:UIButtonTypeSystem];
     btn3.frame = CGRectMake(100, 250, 160, 40);
-    [btn3 setTitle:@"downloadRequest" forState:UIControlStateNormal];
+    [btn3 setTitle:@"downloadData" forState:UIControlStateNormal];
     [self.view addSubview:btn3];
     [btn3 addTarget:self action:@selector(downloadBtnAction) forControlEvents:UIControlEventTouchUpInside];
 
@@ -60,6 +60,8 @@
     NSString *urlString = @"http://mytest.com/test.json";
 //    NSString *urlString = @"http://wodedata.com/MyResource/MyInputMethod/App/OtherVC_v14.json";
     NSURL *url = [NSURL URLWithString:urlString];
+    NSString *requestId = NSUUID.UUID.UUIDString;
+
     NSDictionary *requestHeader = @{
             @"method": @"GET",
             @"headers": @{
@@ -70,8 +72,10 @@
             @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
     };
     NSString *requestHeaderJson = [requestHeader lwwl_jsonStringWithPrettyPrint:NO];
+    NSLog(@"==========requestId:%@", requestId);
 
-    NSString *jsCode = [NSString stringWithFormat:@"getData('%@','%@',%@)",NSUUID.UUID.UUIDString, urlString, requestHeaderJson];
+
+    NSString *jsCode = [NSString stringWithFormat:@"getData('%@','%@',%@)",requestId, urlString, requestHeaderJson];
     [LWWebLoader evaluateJavaScript:jsCode url:url completionHandler:^(id o, NSError *error) {
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
@@ -85,6 +89,7 @@
 - (void)postBtnAction {
     NSString *urlString = @"http://mytest.com/test.json";
     NSURL *url = [NSURL URLWithString:urlString];
+    NSString *requestId = NSUUID.UUID.UUIDString;
     NSDictionary *requestHeader = @{
             @"method": @"POST",
             @"body": @"{\"answer\": 42}",
@@ -96,8 +101,10 @@
             @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
     };
     NSString *requestHeaderJson = [requestHeader lwwl_jsonStringWithPrettyPrint:NO];
+    NSLog(@"==========requestId:%@", requestId);
 
-    NSString *jsCode = [NSString stringWithFormat:@"postData('%@','%@',%@)",NSUUID.UUID.UUIDString,urlString,requestHeaderJson];
+
+    NSString *jsCode = [NSString stringWithFormat:@"postData('%@','%@',%@)",requestId,urlString,requestHeaderJson];
     [LWWebLoader evaluateJavaScript:jsCode url:url completionHandler:^(id o, NSError *error) {
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
@@ -109,7 +116,7 @@
 }
 
 - (void)downloadBtnAction {
-/*
+
     NSString *urlString = @"http://oss.wodedata.com/Fonts/%E5%8D%8E%E6%96%87%E9%9A%B6%E4%B9%A6.ttf";
     NSURL *url = [NSURL URLWithString:urlString];
     NSString *requestId = NSUUID.UUID.UUIDString;
@@ -124,8 +131,28 @@
             @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
     };
     NSString *requestHeaderJson = [requestHeader lwwl_jsonStringWithPrettyPrint:NO];
+    NSLog(@"==========requestId:%@", requestId);
 
-    NSString *jsCode = [NSString stringWithFormat:@"downloadRequest('%@','%@',%@)",requestId,urlString,requestHeaderJson];
+
+    NSString *jsCode = [NSString stringWithFormat:@"downloadData('%@','%@',%@)",requestId,urlString,requestHeaderJson];
+    [LWWebLoader evaluateJavaScript:jsCode url:url completionHandler:^(id o, NSError *error) {
+        if (error) {
+            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+        }
+        if ([o isKindOfClass:[NSString class]]) {
+            NSLog(@"==========downloadData:%@", o);
+        }
+    }];
+
+
+
+/*
+    NSString *urlString = @"http://mytest.com/test.zip";
+    NSURL *url = [NSURL URLWithString:urlString];
+//    NSString *jsCode = [NSString stringWithFormat:@"downloadFile2()"];
+//    NSString *jsCode = [NSString stringWithFormat:@"window.downloadFile()"];
+    NSString *jsCode = [NSString stringWithFormat:@"downloadFile()"];
+
     [LWWebLoader evaluateJavaScript:jsCode url:url completionHandler:^(id o, NSError *error) {
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
@@ -135,23 +162,6 @@
         }
     }];
 */
-
-
-
-    NSString *urlString = @"http://mytest.com/test.zip";
-    NSURL *url = [NSURL URLWithString:urlString];
-//    NSString *jsCode = [NSString stringWithFormat:@"downloadFile2()"];
-//    NSString *jsCode = [NSString stringWithFormat:@"window.downloadFile()"];
-    NSString *jsCode = [NSString stringWithFormat:@"SaveToDisk()"];
-
-    [LWWebLoader evaluateJavaScript:jsCode url:url completionHandler:^(id o, NSError *error) {
-        if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
-        }
-        if ([o isKindOfClass:[NSString class]]) {
-            NSLog(@"==========downloadRequest:%@", o);
-        }
-    }];
 
 
 }
@@ -166,6 +176,7 @@
     }];
 
 
+/*
     NSString *urlString = @"http://mytest.com/test.json";
     NSURL *url = [NSURL URLWithString:urlString];
     NSString *requestId = NSUUID.UUID.UUIDString;
@@ -180,16 +191,18 @@
             @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
     };
     NSString *requestHeaderJson = [requestHeader lwwl_jsonStringWithPrettyPrint:NO];
+    NSLog(@"==========requestId:%@", requestId);
 
-    NSString *jsCode = [NSString stringWithFormat:@"getRequest('%@','%@')",requestId,urlString,requestHeaderJson];
+    NSString *jsCode = [NSString stringWithFormat:@"getData('%@','%@',%@)",requestId,urlString,requestHeaderJson];
     [LWWebLoader evaluateJavaScript:jsCode completionHandler:^(id o, NSError *error) {
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
         }
         if ([o isKindOfClass:[NSString class]]) {
-            NSLog(@"==========getRequest:%@", o);
+            NSLog(@"==========getData:%@", o);
         }
     }];
+*/
 
 
 }

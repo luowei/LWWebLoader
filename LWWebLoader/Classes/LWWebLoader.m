@@ -126,8 +126,26 @@ static WKProcessPool *_pool;
 }
 
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
-    if([message.name isEqualToString:@"lwwebloader"]) {
+    if([message.name isEqualToString:@"jsontext"]) {
         WLLog(@"=====return message:%@",message.body);
+
+    }else if([message.name isEqualToString:@"plaintext"]) {
+        WLLog(@"=====return message:%@",message.body);
+
+    }else if([message.name isEqualToString:@"b64text"]) {
+        WLLog(@"=====return message:%@",message.body);
+        NSData *data = [[NSData alloc] initWithBase64EncodedString:message.body options:0];
+        NSString *homePath = [NSHomeDirectory() stringByAppendingPathComponent:@"aaa.ttf"];
+        BOOL ok = [data writeToFile:homePath atomically:YES];
+        if(ok){
+            WLLog(@"=====writeToFile:%@",homePath);
+        }else{
+            WLLog(@"=====writeToFile 失败");
+        }
+
+    }else if([message.name isEqualToString:@"b64streamtext"]) {
+
+    }else if([message.name isEqualToString:@"b64streamend"]) {
 
     }else if([message.name isEqualToString:@"nativelog"]){
         WLLog(@"=====nativelog:%@",message.body);
@@ -173,7 +191,9 @@ static WKProcessPool *_pool;
     [webConfiguration.userContentController addUserScript:compileFiltersUserScript];
 
     LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler new];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"lwwebloader"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"jsontext"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"plaintext"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64text"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"nativelog"];
 
     WLWebView *webView = [[WLWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:webConfiguration];
@@ -184,7 +204,9 @@ static WKProcessPool *_pool;
 
 - (void)dealloc {
     WLLog(@"===========dealloc WLWebView ");
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"lwwebloader"];
+    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"jsontext"];
+    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"plaintext"];
+    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64text"];
     [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"nativelog"];
 }
 
