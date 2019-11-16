@@ -5,50 +5,227 @@
 #import "LWWebLoader.h"
 #import <ContactsUI/ContactsUI.h>
 
+static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.87 Safari/537.36";
+
+@implementation WLEvaluateBody
+@end
+@implementation WLMessageBody
+- (id)initWithDictionary:(NSDictionary *_Nonnull)dict {
+    self = [super init];
+    if (self) {
+        NSMutableDictionary *mDict = [dict mutableCopy];
+        mDict[@"requestId"] = mDict[@"requestId"] ?: @"";
+        mDict[@"type"] = mDict[@"type"] ?: @"";
+        mDict[@"value"] = mDict[@"value"] ?: @"";
+        mDict[@"done"] = mDict[@"done"] ?: @NO;
+        mDict[@"total"] = mDict[@"total"] ?: @0;
+        mDict[@"received"] = mDict[@"received"] ?: @0;
+        mDict[@"chrunkOrder"] = mDict[@"chrunkOrder"] ?: @0;
+        [self setValuesForKeysWithDictionary:mDict];
+    }
+
+    return self;
+}
+@end
+
+
+@interface WLWebView () <WKNavigationDelegate>
+@property(nonatomic, strong) WKWebViewConfiguration *webConfiguration;
+@property(nonatomic, strong) WLEvaluateBody *evaluateBody;
+@property(nonatomic, copy) void (^evaluateJSCompletionHandler)(id, NSError *);
+@end
+
+@implementation NSDictionary (LWWLSONString)
+
+-(NSString*) lwwl_jsonStringWithPrettyPrint:(BOOL) prettyPrint {
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self options:(NSJSONWritingOptions)    (prettyPrint ? NSJSONWritingPrettyPrinted : 0) error:&error];
+    if (! jsonData) {
+        WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+        return @"{}";
+    } else {
+        return [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    }
+}
+@end
 
 @interface LWWebLoader ()
-@property(nonatomic, strong) WKWebViewConfiguration *configuration;
-@property(nonatomic, copy) void (^contactPickedBlock)(NSString *);
-@property(nonatomic, weak) WLWebView *webview;
+@property(nonatomic, strong) WLWebView *webview;
 @end
 
 @implementation LWWebLoader {
 
 }
 
-static LWWebLoader *_webloader;
-+ (LWWebLoader *)shareInstance {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        _webloader = [[LWWebLoader alloc] init];
-    });
-    return _webloader;
++ (LWWebLoader *)webloader {
+    return [[LWWebLoader alloc] init];;
 }
 
-static WKProcessPool *_pool;
-+ (WKProcessPool *)pool {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        _pool = [[WKProcessPool alloc] init];
-    });
-    return _pool;
-}
++ (WLEvaluateBody *)bodyWithURLString:(NSString *)urlString
+                               method:(LWWebLoadMethod)method
+                            userAgent:(NSString *)userAgent
+                          contentType:(NSString *)contentType
+                             postData:(NSDictionary *)postData
+                           uploadData:(NSData *)uploadData {
 
-+ (void)evaluateJavaScript:(NSString *)jsCode completionHandler:(void (^)(id, NSError *error))completionHandler {
-    NSURL *url = [NSURL URLWithString:@"http://app.wodedata.com"];
-    [LWWebLoader evaluateJavaScript:jsCode url:url completionHandler:completionHandler];
-}
+    NSURL *url = [NSURL URLWithString:urlString ?: @"http://app.wodedata.com"];
+    NSString *requestId = NSUUID.UUID.UUIDString;
 
-+ (void)evaluateJavaScript:(NSString *)jsCode url:(NSURL *)url completionHandler:(void (^)(id, NSError *error))completionHandler {
-    LWWebLoader *webloader = [LWWebLoader shareInstance];
-    if(!webloader.webview){
-        webloader.webview = [WLWebView buildWebView];
+    NSMutableDictionary *defaultHeaders = @{
+            @"user-agent": defaultUA,
+//            @"content-type": @"application/json",
+    }.mutableCopy;
+
+    defaultHeaders[@"user-agent"] = userAgent ?: defaultHeaders[@"user-agent"];
+    if(contentType){
+        defaultHeaders[@"content-type"] = contentType;
     }
 
-    [webloader loadBaseURLWithURL:url jsCode:jsCode completionHandler:completionHandler];
+
+    NSString *evalueteJSMethod = @"getData";
+    NSDictionary *requestHeader = @{
+            @"method": @"GET",
+            @"headers": defaultHeaders,
+            @"cache": @"no-cache",
+            @"referrer": [NSString stringWithFormat:@"%@://%@", url.scheme, url.host]
+    };
+    switch (method){
+        case PostData:{
+            evalueteJSMethod = @"postData";
+            NSString *bodyText = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"";
+            requestHeader = @{
+                    @"method": @"POST",
+                    @"body": bodyText,
+                    @"headers": defaultHeaders,
+                    @"cache": @"no-cache",
+                    @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
+            };
+            break;
+        }
+        case UploadData:{
+            evalueteJSMethod = @"uploadData";
+            NSString *bodyText = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"";
+            requestHeader = @{
+                    @"method": @"POST",
+                    @"body": bodyText,
+                    @"headers": defaultHeaders,
+                    @"cache": @"no-cache",
+                    @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
+            };
+            break;
+        }
+        case DownloadFile:{
+            evalueteJSMethod = @"downloadFile";
+            defaultHeaders[@"requestId"] = requestId;
+            requestHeader = @{
+                    @"method": @"GET",
+                    @"headers": defaultHeaders,
+                    @"cache": @"no-cache",
+                    @"referrer": [NSString stringWithFormat:@"%@://%@", url.scheme, url.host]
+            };
+            break;
+        }
+        case DownloadStream:{
+            evalueteJSMethod = @"downloadStream";
+            defaultHeaders[@"requestId"] = requestId;
+            requestHeader = @{
+                    @"method": @"GET",
+                    @"headers": defaultHeaders,
+                    @"cache": @"no-cache",
+                    @"referrer": [NSString stringWithFormat:@"%@://%@", url.scheme, url.host]
+            };
+            break;
+        }
+        case NativeLog:{
+            evalueteJSMethod = @"log";
+            break;
+        }
+        case GetData:
+        default:{
+            break;
+        }
+    }
+
+
+    NSString *requestHeaderJson = [requestHeader lwwl_jsonStringWithPrettyPrint:NO];
+    WLLog(@"==========requestId:%@", requestId);
+
+    NSString *jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@)",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson];
+    if(method==UploadData){
+        NSString *uploadDataB64String = uploadData ? [uploadData base64Encoding] : nil;
+        jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@,%@)",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson,uploadDataB64String];
+    }
+
+
+    WLEvaluateBody *evaluateBody = [WLEvaluateBody new];
+    evaluateBody.evalueteJSMethod = evalueteJSMethod;
+    evaluateBody.url = url;
+    evaluateBody.requestId = requestId;
+    evaluateBody.jsCode = jsCode;
+
+
+    return evaluateBody;
 }
 
-- (void)loadBaseURLWithURL:(NSURL *)url jsCode:(NSString *)jsCode completionHandler:(void (^)(id, NSError *error))completionHandler{
+
+
+- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView jsExcuteCompletionHandler:(void (^)(id, NSError *error))jsExcuteCompletionHandler {
+    if(!self.webview || self.webview.isLoading){
+        __weak typeof(self) weakSelf = self;
+        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:nil jsCompletionHandler:^(id result,NSError *error){
+            if(jsExcuteCompletionHandler){
+                jsExcuteCompletionHandler(result,error);
+            }
+            [weakSelf.webview removeFromSuperview];
+        }];
+
+        [self loadPageWithBaseURL:evaluateBody.url];
+
+    }else{
+        [self.webview evaluateJavaScript:evaluateBody.jsCode completionHandler:^(id o, NSError *error) {
+            if (jsExcuteCompletionHandler) {
+                jsExcuteCompletionHandler(o, error);
+            }
+        }];
+    }
+
+
+}
+
+
+- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,id,NSError *))dataLoadCompletionHandler {
+    if(!self.webview || self.webview.isLoading){
+        __weak typeof(self) weakSelf = self;
+        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:^(BOOL finish,id result,NSError *error){
+            if(dataLoadCompletionHandler){
+                dataLoadCompletionHandler(finish,result,error);
+            }
+//            [weakSelf.webview removeFromSuperview];
+        } jsCompletionHandler:^(id o, NSError *error) {
+            if (error) {
+                WLLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            }else{
+                WLLog(@"======evaluate js %@ ok \n", evaluateBody.evalueteJSMethod);
+            }
+        }];
+
+        [self loadPageWithBaseURL:evaluateBody.url];
+
+    }else{
+        [self.webview evaluateJavaScript:evaluateBody.jsCode completionHandler:^(id o, NSError *error) {
+            if (self.webview.evaluateJSCompletionHandler) {
+                self.webview.evaluateJSCompletionHandler(o, error);
+            }
+        }];
+    }
+
+
+
+}
+
+
+- (void)loadPageWithBaseURL:(NSURL *_Nonnull)baseURL {
+
     NSBundle *bundle =  ([NSBundle bundleWithPath:[[NSBundle bundleForClass:[self class]] pathForResource:@"LWWebLoader" ofType:@"bundle"]] ?: ([NSBundle bundleWithPath:[[NSBundle mainBundle] pathForResource:@"WLWebLoader " ofType:@"bundle"]] ?: [NSBundle mainBundle]));
     NSURL *fileURL = [bundle URLForResource:@"loader" withExtension:@"html"];
 
@@ -61,8 +238,7 @@ static WKProcessPool *_pool;
         return;
     }
 
-    [self.webview loadHTMLString:faildText baseURL:url];
-    [self.webview evaluateJS:jsCode completionHandler:completionHandler];
+    [self.webview loadHTMLString:faildText baseURL:baseURL];
 
 //    [self.webview loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"http://mytest.com/loader.html"]]];
 
@@ -83,91 +259,135 @@ static WKProcessPool *_pool;
 */}
 
 
-+ (UIViewController*)wl_topViewController {
-    return [LWWebLoader topViewControllerWithRootViewController:[UIApplication sharedApplication].keyWindow.rootViewController];
-}
-
-+ (UIViewController*)topViewControllerWithRootViewController:(UIViewController*)rootViewController {
-    if ([rootViewController isKindOfClass:[UITabBarController class]]) {
-        UITabBarController* tabBarController = (UITabBarController*)rootViewController;
-        return [LWWebLoader topViewControllerWithRootViewController:tabBarController.selectedViewController];
-
-    } else if ([rootViewController isKindOfClass:[UINavigationController class]]) {
-        UINavigationController* navigationController = (UINavigationController*)rootViewController;
-        if(navigationController.visibleViewController!=nil){
-            return [LWWebLoader topViewControllerWithRootViewController:navigationController.visibleViewController];
-        }else{
-            return rootViewController;
-        }
-
-    } else if (rootViewController.presentedViewController) {
-        UIViewController* presentedViewController = rootViewController.presentedViewController;
-        if(presentedViewController!=nil){
-            return [LWWebLoader topViewControllerWithRootViewController:presentedViewController];
-        }else{
-            return rootViewController;
-        }
-
-    } else {
-        return rootViewController;
-    }
-}
 
 @end
 
 
 
+
+
+
+
+#pragma mark - ScriptMessageHandler
+
 @interface LWWLWKScriptMessageHandler : NSObject <WKScriptMessageHandler>
-@property(nonatomic, strong) NSMutableData *dataToDownload;
+//@property(nonatomic, strong) NSMutableData *dataToDownload;
+@property(nonatomic, strong) NSOutputStream *dataStream;
+@property(nonatomic, copy) void (^dataLoadCompletionHandler)(BOOL,id, NSError *);
+
+@property(nonatomic, copy) NSString *streamFilePath;
+
+@property(nonatomic, strong) NSError *streamError;
+
++ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,id, NSError *))dataLoadCompletionHandler;
+
+- (void)streamFilePathWithFileName:(NSString *)fileName;
 @end
 @implementation LWWLWKScriptMessageHandler
 
 - (void)dealloc {
+    if(self.dataStream){
+        [self.dataStream close];
+        self.dataStream = nil;
+    }
     WLLog(@"===========dealloc LWWLWKScriptMessageHandler ");
 }
 
++ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,id, NSError *))dataLoadCompletionHandler {
+    LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler new];
+    messageHandler.dataLoadCompletionHandler = dataLoadCompletionHandler;
+    [messageHandler streamFilePathWithFileName:evaluateBody.requestId];
+    return messageHandler;
+}
+
+- (void)streamFilePathWithFileName:(NSString *)fileName {
+    _streamFilePath = [NSTemporaryDirectory() stringByAppendingPathComponent:fileName];
+}
+
+-(NSString *)streamFilePath {
+    if(!_streamFilePath){
+        _streamFilePath = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    }
+    return _streamFilePath;
+}
+
+-(NSOutputStream *)dataStream {
+    if(!_dataStream){
+        _dataStream = [[NSOutputStream alloc] initToFileAtPath:self.streamFilePath append:YES];
+    }
+    return _dataStream;
+}
+
+/*
 -(NSMutableData *)dataToDownload{
     if(!_dataToDownload){
         _dataToDownload = [[NSMutableData alloc] init];
     }
     return _dataToDownload;
 }
+*/
 
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
-    if([message.name isEqualToString:@"jsontext"]) {
-        WLLog(@"=====return message:%@",message.body);
+    if([message.name isEqualToString:@"bridge"]){
 
-    }else if([message.name isEqualToString:@"plaintext"]) {
-        WLLog(@"=====return message:%@",message.body);
+        if(!message.body){
+            self.dataLoadCompletionHandler(YES,nil, [NSError errorWithDomain:@"数据为空" code:0 userInfo:nil]);
+            return;
 
-    }else if([message.name isEqualToString:@"b64text"]) {
-        WLLog(@"=====return message:%@",message.body);
-        NSData *data = [[NSData alloc] initWithBase64EncodedString:message.body options:0];
-        NSString *homePath = [NSHomeDirectory() stringByAppendingPathComponent:@"aaa.ttf"];
-        BOOL ok = [data writeToFile:homePath atomically:YES];
-        if(ok){
-            WLLog(@"=====writeToFile:%@",homePath);
-        }else{
-            WLLog(@"=====writeToFile 失败");
+        }else if(![message.body isKindOfClass:[NSDictionary class]]){
+            if(self.dataLoadCompletionHandler){
+                self.dataLoadCompletionHandler(YES,nil,[NSError errorWithDomain:@"数据格式错误" code:0 userInfo:nil]);
+            }
+            return;
         }
 
-    }else if([message.name isEqualToString:@"b64streamstart"]) {
-        WLLog(@"=====b64 streaming start !");
-        self.dataToDownload = [[NSMutableData alloc] init];
 
-    }else if([message.name isEqualToString:@"b64streaming"]) {
-        WLLog(@"=====b64 streaming ...");
-        NSData *data = [[NSData alloc] initWithBase64EncodedString:message.body options:0];
-        [self.dataToDownload appendData:data];
+        WLMessageBody *body = [[WLMessageBody alloc] initWithDictionary:message.body];
+        if([body.type isEqualToString:@"json"]) {
+            if(self.dataLoadCompletionHandler){
+                self.dataLoadCompletionHandler(YES,body.value,nil);
+            }
 
-    }else if([message.name isEqualToString:@"b64streamend"]) {
-        WLLog(@"=====b64 streaming finish !");
-        NSString *homePath = [NSHomeDirectory() stringByAppendingPathComponent:@"aaaa"];
-        BOOL ok = [self.dataToDownload writeToFile:homePath atomically:YES];
-        if(ok){
-            WLLog(@"=====writeToFile:%@",homePath);
-        }else{
-            WLLog(@"=====writeToFile 失败");
+        }else if([body.type isEqualToString:@"plaintext"]) {
+            if(self.dataLoadCompletionHandler){
+                self.dataLoadCompletionHandler(YES,body.value,nil);
+            }
+
+        }else if([body.type isEqualToString:@"b64text"]) {
+            NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
+            if(self.dataLoadCompletionHandler){
+                self.dataLoadCompletionHandler(YES,data,nil);
+            }
+
+        }else if([body.type isEqualToString:@"b64streamstart"]) {
+            WLLog(@"=====b64 streaming start !");
+//        self.dataToDownload = [[NSMutableData alloc] init];
+            [self.dataStream open];
+
+        }else if([body.type isEqualToString:@"b64streaming"]) {
+            double progress = body.received.doubleValue/body.total.doubleValue;
+            WLLog(@"=====b64 streaming %.2f...", progress);
+//        [self.dataToDownload appendData:data];
+            NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
+            NSUInteger dataLength = [data length];
+            NSInteger writeLen = [self.dataStream write:[data bytes] maxLength:dataLength];
+            if(dataLength > writeLen){
+                self.streamFilePath = nil;
+                self.streamError = [self.dataStream streamError];
+                [self.dataStream close];
+                self.dataStream = nil;
+            }
+
+        }else if([body.type isEqualToString:@"b64streamend"]) {
+            WLLog(@"=====b64 streaming finish !");
+            if(self.dataStream && self.dataStream.streamStatus != NSStreamStatusClosed){
+                [self.dataStream close];
+                self.dataStream = nil;
+            }
+            if(self.dataLoadCompletionHandler){
+                self.dataLoadCompletionHandler(YES,self.streamFilePath,self.streamError);
+            }
+
         }
 
     }else if([message.name isEqualToString:@"nativelog"]){
@@ -176,14 +396,16 @@ static WKProcessPool *_pool;
 
 }
 
+
 @end
 
 
-@interface WLWebView () <WKNavigationDelegate>
-@property(nonatomic, strong) WKWebViewConfiguration *webConfiguration;
-@property(nonatomic, copy) NSString *jsCode;
-@property(nonatomic, copy) void (^evaluateJSCompletionHandler)(id, NSError *);
-@end
+
+
+
+
+
+#pragma mark - WLWebView
 
 @implementation WLWebView
 
@@ -199,116 +421,58 @@ static WKProcessPool *_pool;
 }
 
 
-+(instancetype)buildWebView {
-
-    UIView *parentView = [LWWebLoader wl_topViewController].view;
-    NSAssert(parentView!=nil, @"===loadWebView 要在父视图创建之后才能调用");
++ (instancetype)buildWebViewWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody
+                                  parentView:(UIView *_Nonnull)parentView
+                   dataLoadCompletionHandler:(void (^)(BOOL, id, NSError *))dataLoadCompletionHandler
+                         jsCompletionHandler:(void (^)(id, NSError *))jsCompletionHandler {
 
     WKWebViewConfiguration *webConfiguration = [[WKWebViewConfiguration alloc] init];
     webConfiguration.userContentController = [WKUserContentController new];
-    webConfiguration.processPool = [LWWebLoader pool];
+    webConfiguration.processPool = [[WKProcessPool alloc] init];
     webConfiguration.applicationNameForUserAgent = [NSString stringWithFormat:@""];
 
-    NSString *injectionJS = @"";
+    NSString *injectionJS = @"function log(msg) {window.webkit.messageHandlers.nativelog.postMessage(msg);}";
     WKUserScript *compileFiltersUserScript = [[WKUserScript alloc] initWithSource:injectionJS injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];
     [webConfiguration.userContentController addUserScript:compileFiltersUserScript];
 
-    LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler new];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"jsontext"];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"plaintext"];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64text"];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamstart"];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streaming"];
-    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamend"];
+    LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler messageHandleWithEvaluateBody:evaluateBody dataLoadCompletionHandler:dataLoadCompletionHandler];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"bridge"];
+//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"plaintext"];
+//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64text"];
+//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamstart"];
+//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streaming"];
+//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamend"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"nativelog"];
 
     WLWebView *webView = [[WLWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:webConfiguration];
     [parentView addSubview:webView];
     webView.navigationDelegate = webView;
+    webView.evaluateBody = evaluateBody;
+    webView.evaluateJSCompletionHandler = jsCompletionHandler;
     return webView;
 }
 
 - (void)dealloc {
     WLLog(@"===========dealloc WLWebView ");
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"jsontext"];
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"plaintext"];
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64text"];
+    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"bridge"];
+//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"plaintext"];
+//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64text"];
+//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64streamstart"];
+//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64streaming"];
+//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64streamend"];
     [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"nativelog"];
 }
 
-- (void)evaluateJS:(NSString *)jsCode completionHandler:(void (^)(id, NSError *))completionHandler {
-    self.jsCode = jsCode;
-    self.evaluateJSCompletionHandler = completionHandler;
-
-//    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t) (1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-//
-//    });
-}
-
-// 在发送请求之前，决定是否跳转
-- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
 
 /*
-    NSURLRequest *request = navigationAction.request;
-    NSURL *url = request.URL;
-    if([url.scheme hasPrefix:@"http"]){
-        decisionHandler(WKNavigationActionPolicyAllow);
-        return;
-    }
-
-    WLLog(@"=====fileURL: %@",url.absoluteString);
-
-    NSString *fileExtensions = @"zip|mp4|mp3|jpg|gif|ttf";
-
-    if (navigationAction.navigationType == WKNavigationTypeLinkActivated) {
-
-        //Internal file links
-        NSString *internalFileExtension = url.absoluteString.pathExtension;
-        if ([fileExtensions containsString:[internalFileExtension lowercaseString]]) {
-
-            NSLog(@"internalURL is %@", url);
-            decisionHandler(WKNavigationActionPolicyCancel);
-            return;
-        }
-
-        //External file extensions
-        NSString *externalFileExtension = url.pathExtension;
-        if ([fileExtensions containsString:[externalFileExtension lowercaseString]]) {
-            NSLog(@"externalURL is %@", url);
-            decisionHandler(WKNavigationActionPolicyCancel);
-            return;
-        }
-    }
-*/
-
+// 在发送请求之前，决定是否跳转
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     decisionHandler(WKNavigationActionPolicyAllow);
 
 }
-
-
 - (void)webView:(WKWebView *)webView decidePolicyForNavigationResponse:(WKNavigationResponse *)navigationResponse decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler{
-
-
-    if([navigationResponse.response isKindOfClass:[NSHTTPURLResponse class]]){
-        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *) navigationResponse.response;
-        NSDictionary * headers= httpResponse.allHeaderFields;
-        NSURL *url = httpResponse.URL;
-    }
-
-    if(navigationResponse.canShowMIMEType){
-        NSString *mimeType = ((NSHTTPURLResponse *)navigationResponse.response).MIMEType;
-        WLLog(@"======mimeType: %@",mimeType);
-
-        //参考：https://github.com/kfix/MacPin/blob/swift5.0/modules/MacPin/WebViewDelegates.swift
-        decisionHandler( (WKNavigationResponsePolicy)(WKNavigationResponsePolicyAllow + 1)); //.BecomeDownload
-    }
-
-
-    WLLog(@"======isForMainFrame: %@",navigationResponse.isForMainFrame ? @"YES" : @"NO");
-
     decisionHandler(WKNavigationResponsePolicyAllow);
 }
-
 
 //参考：iOS WKWebView基本使用总结:https://lishibo-ios.github.io/2018/06/11/WKWebView/
 // 页面开始加载时调用
@@ -319,19 +483,27 @@ static WKProcessPool *_pool;
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
     WLLog(@"===========webview didCommitNavigation");
 }
+*/
+
 // 页面加载完成之后调用
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     WLLog(@"===========webview didFinishNavigation");
 
-    [self evaluateJavaScript:self.jsCode completionHandler:^(id o, NSError *error) {
+    [self evaluateJavaScript:self.evaluateBody.jsCode completionHandler:^(id o, NSError *error) {
         if (self.evaluateJSCompletionHandler) {
             self.evaluateJSCompletionHandler(o, error);
         }
     }];
 
+    [self showWebCachePath];
+
+}
+
+- (void)showWebCachePath {
     /* 取得Library文件夹的位置*/
     NSString *libraryDir = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,NSUserDomainMask, YES)[0];
-    /* 取得bundle id，用作文件拼接用*/ NSString *bundleId = [[NSBundle mainBundle] infoDictionary][@"CFBundleIdentifier"];
+    /* 取得bundle id，用作文件拼接用*/
+    NSString *bundleId = [[NSBundle mainBundle] infoDictionary][@"CFBundleIdentifier"];
     /* * 拼接缓存地址，具体目录为App/Library/Caches/你的APPBundleID/fsCachedData */
     NSString *webKitFolderInCachesfs = [NSString stringWithFormat:@"%@/Caches/%@/WebKit",libraryDir,bundleId];
     WLLog(@"==========webkit folder: %@",webKitFolderInCachesfs);

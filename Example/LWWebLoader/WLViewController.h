@@ -8,6 +8,8 @@
 
 @import UIKit;
 
+@class LWWebLoader;
+
 @interface WLViewController : UIViewController
 
 @end
