@@ -19,13 +19,15 @@ typedef NS_OPTIONS(NSUInteger, LWWebLoadMethod) {
     UploadData = 2,
     DownloadFile = 3,
     DownloadStream = 4,
-    NativeLog = 5,
+    GetClipboardText = 5,
+    NativeLog = 6,
 };
 
 @interface WLEvaluateBody : NSObject
 @property (nonatomic, strong) NSURL *url;
 @property (nonatomic, copy) NSString *requestId;
 @property (nonatomic, copy) NSString *evalueteJSMethod;
+@property (nonatomic, copy) NSString *methodArguments;
 @property (nonatomic, copy) NSString *jsCode;
 
 //@property (nonatomic, strong) NSDictionary *headers;
@@ -54,6 +56,7 @@ typedef NS_OPTIONS(NSUInteger, LWWebLoadMethod) {
 
 + (WLEvaluateBody *)bodyWithURLString:(NSString *)urlString
                                method:(LWWebLoadMethod)method
+                      methodArguments:(NSString *)methodArguments
                             userAgent:(NSString *)userAgent
                           contentType:(NSString *)contentType
                              postData:(NSDictionary *)postData

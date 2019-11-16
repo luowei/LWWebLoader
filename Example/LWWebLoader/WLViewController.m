@@ -9,8 +9,9 @@
 #import "WLViewController.h"
 #import "LWWebLoader.h"
 #import <LWWebLoader/LWWebLoader.h>
+#import <SafariServices/SafariServices.h>
 
-@interface WLViewController ()
+@interface WLViewController () <SFSafariViewControllerDelegate>
 
 @property(nonatomic, strong) LWWebLoader *webloader;
 @end
@@ -51,7 +52,20 @@
     [self.view addSubview:btn5];
     [btn5 addTarget:self action:@selector(downloadStreamBtnAction) forControlEvents:UIControlEventTouchUpInside];
 
+    UIButton *btn6 = [UIButton buttonWithType:UIButtonTypeSystem];
+    btn6.frame = CGRectMake(100, 400, 160, 40);
+    [btn6 setTitle:@"getClipboardText" forState:UIControlStateNormal];
+    [self.view addSubview:btn6];
+    [btn6 addTarget:self action:@selector(getClipboardTextBtnAction) forControlEvents:UIControlEventTouchUpInside];
+
+    UIButton *btn7 = [UIButton buttonWithType:UIButtonTypeSystem];
+    btn7.frame = CGRectMake(100, 450, 160, 40);
+    [btn7 setTitle:@"SFSafariViewController" forState:UIControlStateNormal];
+    [self.view addSubview:btn7];
+    [btn7 addTarget:self action:@selector(safariVCBtnAction) forControlEvents:UIControlEventTouchUpInside];
+
 }
+
 
 -(LWWebLoader *)webloader {
     if(!_webloader){
@@ -79,7 +93,7 @@
     NSString *urlString = @"http://mytest.com/influence.pdf";
 //    NSString *urlString = @"http://wodedata.com/MyResource/MyInputMethod/App/OtherVC_v14.json";
 
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:GetData userAgent:nil contentType:nil postData:nil uploadData:nil];
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:GetData methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
     [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result,NSError *error){
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
@@ -100,7 +114,7 @@
     NSString *urlString = @"http://mytest.com/influence.pdf";
 
     NSString *contentType = @"application/json";
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:PostData userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:nil];
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:PostData methodArguments:nil userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:nil];
     [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, id result, NSError *error) {
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
@@ -124,7 +138,7 @@
 
     NSString *contentType = nil;
     NSData *uploadData = [NSData dataWithContentsOfFile:filePath];
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:UploadData userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:uploadData];
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:UploadData methodArguments:nil userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:uploadData];
     [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, id result, NSError *error) {
         if (error) {
             NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
@@ -143,7 +157,7 @@
 -(void)downloadFileBtnAction {
 
     NSString *urlString = @"http://mytest.com/test.zip";
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadFile userAgent:nil contentType:nil postData:nil uploadData:nil];
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadFile methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
     [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
         //处理文件，result为NSData
         if (error) {
@@ -165,7 +179,7 @@
 
     NSString *urlString = @"http://oss.wodedata.com/Fonts/%E5%8D%8E%E6%96%87%E9%9A%B6%E4%B9%A6.ttf";
 //    NSString *urlString = @"http://mytest.com/test.zip";
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadStream userAgent:nil contentType:nil postData:nil uploadData:nil];
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadStream methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
     [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
         //处理文件，data为文件路径
         if (error) {
@@ -179,18 +193,53 @@
 
 }
 
+-(void)getClipboardTextBtnAction {
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:nil method:GetClipboardText methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+        //处理文件，data为文件路径
+        if (error) {
+            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            return;
+        }
+        if ([result isKindOfClass:[NSString class]]) {
+            NSLog(@"==========从粘贴板获得:%@", result);
+        }
+    }];
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
-/*
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:nil method:NativeLog userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [LWWebLoader.webloader evaluateWithBody:evaluateBody parentView:self.view jsExcuteCompletionHandler:^(id o, NSError *error) {
-        if ([o isKindOfClass:[NSString class]]) {
-            NSLog(@"==========log:%@", o);
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:nil method:NativeLog methodArguments:@"aaaaaaaaa" userAgent:nil contentType:nil postData:nil uploadData:nil];
+    [LWWebLoader.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+        if ([result isKindOfClass:[NSString class]]) {
+            NSLog(@"==========log:%@", result);
         }
     }];
-*/
 
+}
+
+-(void)safariVCBtnAction{
+    SFSafariViewController *safariVC = [[SFSafariViewController alloc] initWithURL:[NSURL URLWithString:@"http://wodedata.com.com"] entersReaderIfAvailable:YES];
+    safariVC.delegate = self;
+    [self presentViewController:safariVC animated:YES completion:nil];
+}
+
+
+#pragma mark - SFSafariViewControllerDelegate
+
+- (void)safariViewControllerDidFinish:(SFSafariViewController *)controller{
+    NSLog(@"==[%s,%s] %i : %s  ",__DATE__,__TIME__,__LINE__,__FUNCTION__);
+}
+
+
+- (void)safariViewController:(SFSafariViewController *)controller didCompleteInitialLoad:(BOOL)didLoadSuccessfully{
+    NSLog(@"==[%s,%s] %i : %s  ",__DATE__,__TIME__,__LINE__,__FUNCTION__);
+}
+
+
+- (void)safariViewController:(SFSafariViewController *)controller initialLoadDidRedirectToURL:(NSURL *)URL{
+    NSLog(@"==[%s,%s] %i : %s  ",__DATE__,__TIME__,__LINE__,__FUNCTION__);
 }
 
 
