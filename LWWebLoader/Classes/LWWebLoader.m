@@ -92,10 +92,10 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     switch (method){
         case PostData:{
             evalueteJSMethod = @"postData";
-            NSString *bodyText = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"";
+            NSString *bodyJson = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"{}";
             requestHeader = @{
                     @"method": @"POST",
-                    @"body": bodyText,
+                    @"body": bodyJson,
                     @"headers": defaultHeaders,
                     @"cache": @"no-cache",
                     @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
@@ -104,10 +104,8 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
         }
         case UploadData:{
             evalueteJSMethod = @"uploadData";
-            NSString *bodyText = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"";
             requestHeader = @{
                     @"method": @"POST",
-                    @"body": bodyText,
                     @"headers": defaultHeaders,
                     @"cache": @"no-cache",
                     @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
@@ -152,8 +150,9 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
     NSString *jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@)",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson];
     if(method==UploadData){
-        NSString *uploadDataB64String = uploadData ? [uploadData base64Encoding] : nil;
-        jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@,%@)",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson,uploadDataB64String];
+        NSString *postDataJson = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"{}";
+        NSString *uploadDataB64String = uploadData ? [uploadData base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength] : nil;
+        jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@,%@,'%@')",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson,postDataJson,uploadDataB64String];
     }
 
 

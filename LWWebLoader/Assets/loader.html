@@ -322,25 +322,33 @@
         }
 
         function arrayBufferToBase64( buffer ) {
-            var binary = '';
-            var bytes = new Uint8Array( buffer );
-            var len = bytes.byteLength;
-            for (var i = 0; i < len; i++) {
+            let binary = '';
+            let bytes = new Uint8Array( buffer );
+            let len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
                 binary += String.fromCharCode( bytes[ i ] );
             }
             return window.btoa( binary );
         }
 
-
-
         function base64ToArrayBuffer(base64) {
-            var binary_string =  window.atob(base64);
-            var len = binary_string.length;
-            var bytes = new Uint8Array( len );
-            for (var i = 0; i < len; i++)        {
+            let binary_string =  window.atob(base64);
+            let len = binary_string.length;
+            let bytes = new Uint8Array( len );
+            for (let i = 0; i < len; i++)        {
                 bytes[i] = binary_string.charCodeAt(i);
             }
             return bytes.buffer;
+        }
+
+        function isDict(v) {
+            return typeof v==='object' && v!==null && !(v instanceof Array) && !(v instanceof Date);
+        }
+        function isIterable(obj) {
+            if (obj == null) {
+                return false;
+            }
+            return typeof obj[Symbol.iterator] === 'function';
         }
 
         function outputData(requestId,data) {
@@ -424,25 +432,18 @@
         }
 
         //Upload Json Data
-        function uploadJson(requestId, url, requestInit, b64Str) {
-            fetch(url, {
-                method: 'POST', // or 'PUT'
-                body: JSON.stringify(data), // data can be `string` or {object}!
-                headers: new Headers({
-                    'Content-Type': 'application/json'
-                })
-            }).then(res => {
-                return res.json();
+        function uploadJson(requestId, url, requestInit, postData, b64Str) {
+            const fd = new FormData();
+            fd.append('file', base64ToArrayBuffer(b64Str));
 
-            }).catch(error => {
-                console.error('Error:', error);
-                return error;
+            if (isDict(postData) && isIterable(postData)) {
+                for (let item in postData) {
+                    fd.append(item, postData[item]);
+                }
+            }
+            requestInit['body'] = fd;
 
-            }).then(response => {
-                console.log('Success:', response);
-                window.webkit.messageHandlers.bridge.postMessage(response);
-
-            });
+            loadData(requestId, url, requestInit);
 
 
 /*
@@ -469,30 +470,6 @@
                 .then(res => consume(res.body.getReader()))
                 .then(() => log("consumed the entire body without keeping the whole thing in memory!"))
                 .catch(e => log("something went wrong: " + e))
-*/
-
-/*
-            //参考：https://zhuanlan.zhihu.com/p/34291688
-            const fd = new FormData()
-            fd.append('file', fileBtn.files[0])
-            fd.append('userName', userName.value)
-            fd.append('age','18')
-            fetch('http://localhost:3036/upload', {
-                method: 'POST',
-                body: fd,
-                // headers: {
-                //   'Content-Type': 'multipart/form-data'
-                // }
-            }).then(res => {
-                if(res.ok) {
-                    console.log('success')
-                    return res.json();
-                } else {
-                    console.log('网络错误')
-                }
-            }).then(res => {
-                console.log('res is',res);
-            })
 */
 
         }

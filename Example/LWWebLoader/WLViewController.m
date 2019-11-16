@@ -37,7 +37,7 @@
     btn3.frame = CGRectMake(100, 250, 160, 40);
     [btn3 setTitle:@"uploadData" forState:UIControlStateNormal];
     [self.view addSubview:btn3];
-    [btn3 addTarget:self action:@selector(postBtnAction) forControlEvents:UIControlEventTouchUpInside];
+    [btn3 addTarget:self action:@selector(uploadBtnAction) forControlEvents:UIControlEventTouchUpInside];
 
     UIButton *btn4 = [UIButton buttonWithType:UIButtonTypeSystem];
     btn4.frame = CGRectMake(100, 300, 160, 40);
@@ -99,7 +99,7 @@
 //    NSString *urlString = @"http://mytest.com/test.json";
     NSString *urlString = @"http://mytest.com/influence.pdf";
 
-    NSDictionary *contentType = @{ @"Content-Type": @"application/json", };
+    NSString *contentType = @"application/json";
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:PostData userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:nil];
     [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, id result, NSError *error) {
         if (error) {
@@ -116,12 +116,47 @@
     }];
 }
 
+- (void)uploadBtnAction {
+//    NSString *urlString = @"http://mytest.com/test.json";
+    NSString *urlString = @"http://mytest.com:8000";
+
+    NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"influence.pdf"];
+
+    NSString *contentType = nil;
+    NSData *uploadData = [NSData dataWithContentsOfFile:filePath];
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:UploadData userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:uploadData];
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, id result, NSError *error) {
+        if (error) {
+            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            return;
+        }
+        if ([result isKindOfClass:[NSString class]]) {
+            NSLog(@"==========uploadData return text:%@", result);
+        }else if([result isKindOfClass:[NSDictionary class]]){
+            NSLog(@"==========uploadData return dict:%@", result);
+        }else if([result isKindOfClass:[NSData class]]){
+            [self writeToFileWithData:result];
+        }
+    }];
+}
+
 -(void)downloadFileBtnAction {
 
     NSString *urlString = @"http://mytest.com/test.zip";
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadFile userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id data, NSError *error) {
-        //todo: 处理文件，data为NSData
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+        //处理文件，result为NSData
+        if (error) {
+            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            return;
+        }
+        if ([result isKindOfClass:[NSString class]]) {
+            NSLog(@"==========uploadData return text:%@", result);
+        }else if([result isKindOfClass:[NSDictionary class]]){
+            NSLog(@"==========uploadData return dict:%@", result);
+        }else if([result isKindOfClass:[NSData class]]){
+            [self writeToFileWithData:result];
+        }
     }];
 
 }
@@ -131,8 +166,15 @@
     NSString *urlString = @"http://oss.wodedata.com/Fonts/%E5%8D%8E%E6%96%87%E9%9A%B6%E4%B9%A6.ttf";
 //    NSString *urlString = @"http://mytest.com/test.zip";
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadStream userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id data, NSError *error) {
-        //todo: 处理文件，data为文件路径
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+        //处理文件，data为文件路径
+        if (error) {
+            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            return;
+        }
+        if ([result isKindOfClass:[NSString class]]) {
+            NSLog(@"==========文件的文件保存的路径为:%@", result);
+        }
     }];
 
 }
