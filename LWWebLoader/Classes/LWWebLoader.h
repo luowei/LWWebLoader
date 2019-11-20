@@ -47,6 +47,27 @@ typedef NS_OPTIONS(NSUInteger, LWWebLoadMethod) {
 - (id)initWithDictionary:(NSDictionary *_Nonnull)dict;
 @end
 
+
+typedef NS_OPTIONS(NSUInteger, WLHanderBodyType) {
+    BodyType_Error = 0,
+    BodyType_Json = 1,
+    BodyType_PlainText = 2,
+    BodyType_Data = 3,
+    BodyType_StreamStart = 4,
+    BodyType_Streaming = 5,
+    BodyType_StreamEnd = 6,
+    BodyType_Other = 7,
+};
+
+
+@interface WLHanderBody : NSObject
+@property (nonatomic, copy) NSString *requestId;
+@property (nonatomic, assign) WLHanderBodyType bodyType;
+@property (nonatomic, strong) id handlerResult;
++ (instancetype)bodyWithId:(NSString *_Nonnull)rid bodyType:(WLHanderBodyType)bodyType handlerResult:(id)handlerResult;
+@end
+
+
 @interface NSDictionary (LWWLSONString)
 -(NSString*) lwwl_jsonStringWithPrettyPrint:(BOOL) prettyPrint;
 @end
@@ -61,8 +82,8 @@ typedef NS_OPTIONS(NSUInteger, LWWebLoadMethod) {
                           contentType:(NSString *)contentType
                              postData:(NSDictionary *)postData
                            uploadData:(NSData *)uploadData;
-- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView jsExcuteCompletionHandler:(void (^)(id, NSError *error))jsExcuteCompletionHandler;
-- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,id,NSError *))dataLoadCompletionHandler;
+//- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView jsExcuteCompletionHandler:(void (^)(id, NSError *error))jsExcuteCompletionHandler;
+- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull,NSError *))dataLoadCompletionHandler;
 
 @end
 
@@ -71,7 +92,7 @@ typedef NS_OPTIONS(NSUInteger, LWWebLoadMethod) {
 
 + (instancetype)buildWebViewWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody
                                   parentView:(UIView *_Nonnull)parentView
-                   dataLoadCompletionHandler:(void (^)(BOOL, id, NSError *))dataLoadCompletionHandler
+                   dataLoadCompletionHandler:(void (^)(BOOL, WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler
                          jsCompletionHandler:(void (^)(id, NSError *))jsCompletionHandler;
 
 @end

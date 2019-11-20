@@ -18,6 +18,7 @@
 		6003F5A9195388D20070C39A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6003F5A8195388D20070C39A /* Images.xcassets */; };
 		71719F9F1E33DC2100824A3D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 71719F9D1E33DC2100824A3D /* LaunchScreen.storyboard */; };
 		873B8AEB1B1F5CCA007FD442 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 873B8AEA1B1F5CCA007FD442 /* Main.storyboard */; };
+		BEF06EDBA096AE9D6E899C5A /* WLConcurrenceLoadVC.m in Sources */ = {isa = PBXBuildFile; fileRef = BEF0694C2F155139C36263D8 /* WLConcurrenceLoadVC.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,8 @@
 		873B8AEA1B1F5CCA007FD442 /* Main.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = Main.storyboard; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		884E81FB57AA01FDAB5FB766 /* Pods-LWWebLoader_Example.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LWWebLoader_Example.release.xcconfig"; path = "Target Support Files/Pods-LWWebLoader_Example/Pods-LWWebLoader_Example.release.xcconfig"; sourceTree = "<group>"; };
 		AF67C385FB473CA366F26D64 /* Pods-LWWebLoader_Example.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LWWebLoader_Example.debug.xcconfig"; path = "Target Support Files/Pods-LWWebLoader_Example/Pods-LWWebLoader_Example.debug.xcconfig"; sourceTree = "<group>"; };
+		BEF0694C2F155139C36263D8 /* WLConcurrenceLoadVC.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = WLConcurrenceLoadVC.m; sourceTree = "<group>"; };
+		BEF06EDEE096755A45CBF1AD /* WLConcurrenceLoadVC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WLConcurrenceLoadVC.h; sourceTree = "<group>"; };
 		BEF3FB6295B1B761058CC3CB /* Pods_LWWebLoader_Tests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LWWebLoader_Tests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8CB21081C14289B42DBF935 /* LWWebLoader.podspec */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = LWWebLoader.podspec; path = ../LWWebLoader.podspec; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -111,6 +114,8 @@
 				71719F9D1E33DC2100824A3D /* LaunchScreen.storyboard */,
 				6003F5A8195388D20070C39A /* Images.xcassets */,
 				6003F594195388D20070C39A /* Supporting Files */,
+				BEF0694C2F155139C36263D8 /* WLConcurrenceLoadVC.m */,
+				BEF06EDEE096755A45CBF1AD /* WLConcurrenceLoadVC.h */,
 			);
 			name = "Example for LWWebLoader";
 			path = LWWebLoader;
@@ -288,6 +293,7 @@
 				6003F59E195388D20070C39A /* WLAppDelegate.m in Sources */,
 				6003F5A7195388D20070C39A /* WLViewController.m in Sources */,
 				6003F59A195388D20070C39A /* main.m in Sources */,
+				BEF06EDBA096AE9D6E899C5A /* WLConcurrenceLoadVC.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

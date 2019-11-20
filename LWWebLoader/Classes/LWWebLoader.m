@@ -10,11 +10,12 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 @implementation WLEvaluateBody
 -(NSURL *)url{
     if(!_url){
-        _url = [NSURL URLWithString:@"http://app.wodedata.com"];
+        _url = [NSURL URLWithString:@"http://localhost"];
     }
     return _url;
 }
 @end
+
 @implementation WLMessageBody
 - (id)initWithDictionary:(NSDictionary *_Nonnull)dict {
     self = [super init];
@@ -34,10 +35,22 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 }
 @end
 
+@implementation WLHanderBody
++ (instancetype)bodyWithId:(NSString *_Nonnull)rid bodyType:(WLHanderBodyType)bodyType handlerResult:(id)handlerResult {
+    WLHanderBody *body = [WLHanderBody new];
+    body.requestId = rid;
+    body.bodyType = bodyType;
+    body.handlerResult = handlerResult;
+    return body;
+}
+
+@end
+
 
 @interface WLWebView () <WKNavigationDelegate>
-@property(nonatomic, strong) WKWebViewConfiguration *webConfiguration;
+@property(nonatomic, weak) WKWebViewConfiguration *webConfiguration;
 @property(nonatomic, strong) WLEvaluateBody *evaluateBody;
+@property(nonatomic, assign) BOOL didCommitNavigation;
 @property(nonatomic, copy) void (^evaluateJSCompletionHandler)(id, NSError *);
 @end
 
@@ -56,7 +69,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 @end
 
 @interface LWWebLoader ()
-@property(nonatomic, strong) WLWebView *webview;
+@property(nonatomic, weak) WLWebView *webview;
 @end
 
 @implementation LWWebLoader {
@@ -75,7 +88,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                              postData:(NSDictionary *)postData
                            uploadData:(NSData *)uploadData {
 
-    NSURL *url = [NSURL URLWithString:urlString ?: @"http://app.wodedata.com"];
+    NSURL *url = [NSURL URLWithString:urlString ?: @"http://localhost"];
     NSString *requestId = NSUUID.UUID.UUIDString;
 
     NSMutableDictionary *defaultHeaders = @{
@@ -89,13 +102,18 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     }
 
 
+    NSString *referrer = [NSString stringWithFormat:@"%@://%@", url.scheme, url.host];
+    if(!(url.port.integerValue == 0 || url.port.integerValue == 80)){
+        referrer = [referrer stringByAppendingFormat:@":%ld",(long)url.port.integerValue];
+    }
     NSString *evalueteJSMethod = @"getData";
     NSDictionary *requestHeader = @{
             @"method": @"GET",
             @"headers": defaultHeaders,
             @"cache": @"no-cache",
-            @"referrer": [NSString stringWithFormat:@"%@://%@", url.scheme, url.host]
+            @"referrer": referrer,
     };
+
     switch (method){
         case PostData:{
             evalueteJSMethod = @"postData";
@@ -105,7 +123,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                     @"body": bodyJson,
                     @"headers": defaultHeaders,
                     @"cache": @"no-cache",
-                    @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
+                    @"referrer": referrer
             };
             break;
         }
@@ -115,7 +133,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                     @"method": @"POST",
                     @"headers": defaultHeaders,
                     @"cache": @"no-cache",
-                    @"referrer": [NSString stringWithFormat:@"%@://%@",url.scheme,url.host]
+                    @"referrer": referrer
             };
             break;
         }
@@ -126,7 +144,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                     @"method": @"GET",
                     @"headers": defaultHeaders,
                     @"cache": @"no-cache",
-                    @"referrer": [NSString stringWithFormat:@"%@://%@", url.scheme, url.host]
+                    @"referrer": referrer
             };
             break;
         }
@@ -137,7 +155,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                     @"method": @"GET",
                     @"headers": defaultHeaders,
                     @"cache": @"no-cache",
-                    @"referrer": [NSString stringWithFormat:@"%@://%@", url.scheme, url.host]
+                    @"referrer": referrer
             };
             break;
         }
@@ -161,12 +179,14 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     if (method == GetClipboardText) {
         evaluateBody.evalueteJSMethod = evalueteJSMethod;
         evaluateBody.requestId = requestId;
-        evaluateBody.url = [NSURL URLWithString:@"http://localhost"];
+        evaluateBody.url = url;
         evaluateBody.jsCode = [NSString stringWithFormat:@"%@('%@')", evalueteJSMethod, requestId ?: @""];
         return evaluateBody;
 
     } else if (method == NativeLog) {
         evaluateBody.evalueteJSMethod = evalueteJSMethod;
+        evaluateBody.requestId = requestId;
+        evaluateBody.url = url;
         evaluateBody.methodArguments = methodArguments;
         evaluateBody.jsCode = [NSString stringWithFormat:@"%@('%@')", evalueteJSMethod, methodArguments ?: @""];
         return evaluateBody;
@@ -177,7 +197,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     NSString *jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@)",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson];
     if(method==UploadData){
         NSString *postDataJson = postData ? [postData lwwl_jsonStringWithPrettyPrint:NO] : @"{}";
-        NSString *uploadDataB64String = uploadData ? [uploadData base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength] : nil;
+        NSString *uploadDataB64String = uploadData ? [uploadData base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed] : nil;
         jsCode = [NSString stringWithFormat:@"%@('%@','%@',%@,%@,'%@')",evalueteJSMethod,requestId,url.absoluteString,requestHeaderJson,postDataJson,uploadDataB64String];
     }
 
@@ -194,13 +214,18 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 
 - (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView jsExcuteCompletionHandler:(void (^)(id, NSError *error))jsExcuteCompletionHandler {
-    if(!self.webview || self.webview.isLoading){
+
+    BOOL isSameHost = [self.webview.URL.host isEqualToString:evaluateBody.url.host];
+    if(!self.webview || !self.webview.didCommitNavigation || !isSameHost){
         __weak typeof(self) weakSelf = self;
-        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:nil jsCompletionHandler:^(id result,NSError *error){
+        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:^(BOOL finish,id result,NSError *error) {
+            [weakSelf.webview removeFromSuperview];
+            weakSelf.webview = nil;
+
+        } jsCompletionHandler:^(id result,NSError *error){
             if(jsExcuteCompletionHandler){
                 jsExcuteCompletionHandler(result,error);
             }
-            [weakSelf.webview removeFromSuperview];
         }];
 
         [self loadPageWithBaseURL:evaluateBody.url];
@@ -217,17 +242,20 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 }
 
 
-- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,id,NSError *))dataLoadCompletionHandler {
-    if(!self.webview || self.webview.isLoading){
+- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull,NSError *))dataLoadCompletionHandler {
+    BOOL isSameHost = [self.webview.URL.host isEqualToString:evaluateBody.url.host] && self.webview.URL.port.integerValue == evaluateBody.url.port.integerValue;
+    if(!self.webview || !self.webview.didCommitNavigation || !isSameHost){
         __weak typeof(self) weakSelf = self;
-        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:^(BOOL finish,id result,NSError *error){
+        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:^(BOOL finish,WLHanderBody *result,NSError *error){
             if(dataLoadCompletionHandler){
                 dataLoadCompletionHandler(finish,result,error);
             }
-//            [weakSelf.webview removeFromSuperview];
+            [weakSelf.webview removeFromSuperview];
+            weakSelf.webview = nil;
+
         } jsCompletionHandler:^(id o, NSError *error) {
             if (error) {
-                WLLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+                WLLog(@"======error:%@\n", error);
             }else{
                 WLLog(@"======evaluate js %@ ok \n", evaluateBody.evalueteJSMethod);
             }
@@ -236,9 +264,10 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
         [self loadPageWithBaseURL:evaluateBody.url];
 
     }else{
+        __weak typeof(self) weakSelf = self;
         [self.webview evaluateJavaScript:evaluateBody.jsCode completionHandler:^(id o, NSError *error) {
-            if (self.webview.evaluateJSCompletionHandler) {
-                self.webview.evaluateJSCompletionHandler(o, error);
+            if (weakSelf.webview.evaluateJSCompletionHandler) {
+                weakSelf.webview.evaluateJSCompletionHandler(o, error);
             }
         }];
     }
@@ -273,6 +302,9 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 */
 }
 
+- (void)dealloc {
+    WLLog(@"======== dealloc LWWebLoader");
+}
 
 
 @end
@@ -288,13 +320,13 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 @interface LWWLWKScriptMessageHandler : NSObject <WKScriptMessageHandler>
 //@property(nonatomic, strong) NSMutableData *dataToDownload;
 @property(nonatomic, strong) NSOutputStream *dataStream;
-@property(nonatomic, copy) void (^dataLoadCompletionHandler)(BOOL,id, NSError *);
+@property(nonatomic, copy) void (^dataLoadCompletionHandler)(BOOL,WLHanderBody *_Nonnull, NSError *);
 
 @property(nonatomic, copy) NSString *streamFilePath;
 
 @property(nonatomic, strong) NSError *streamError;
 
-+ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,id, NSError *))dataLoadCompletionHandler;
++ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler;
 
 - (void)streamFilePathWithFileName:(NSString *)fileName;
 @end
@@ -308,7 +340,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     WLLog(@"===========dealloc LWWLWKScriptMessageHandler ");
 }
 
-+ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,id, NSError *))dataLoadCompletionHandler {
++ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler {
     LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler new];
     messageHandler.dataLoadCompletionHandler = dataLoadCompletionHandler;
     [messageHandler streamFilePathWithFileName:evaluateBody.requestId];
@@ -347,13 +379,15 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
         if(!message.body){
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,nil, [NSError errorWithDomain:@"数据为空" code:0 userInfo:nil]);
+                WLHanderBody *body = [WLHanderBody bodyWithId:@"-1" bodyType:BodyType_Error handlerResult:nil];
+                self.dataLoadCompletionHandler(YES,body, [NSError errorWithDomain:@"数据为空" code:0 userInfo:nil]);
             }
             return;
 
         }else if(![message.body isKindOfClass:[NSDictionary class]]){
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,nil,[NSError errorWithDomain:@"数据格式错误" code:0 userInfo:nil]);
+                WLHanderBody *body = [WLHanderBody bodyWithId:@"-1" bodyType:BodyType_Error handlerResult:nil];
+                self.dataLoadCompletionHandler(YES,body,[NSError errorWithDomain:@"数据格式错误" code:0 userInfo:nil]);
             }
             return;
         }
@@ -361,29 +395,34 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
         WLMessageBody *body = [[WLMessageBody alloc] initWithDictionary:message.body];
         if([body.type isEqualToString:@"json"]) {
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,body.value,nil);
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Json handlerResult:body.value];
+                self.dataLoadCompletionHandler(YES,bod,nil);
             }
 
         }else if([body.type isEqualToString:@"plaintext"]) {
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,body.value,nil);
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_PlainText handlerResult:body.value];
+                self.dataLoadCompletionHandler(YES,bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64text"]) {
             NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,data,nil);
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Data handlerResult:data];
+                self.dataLoadCompletionHandler(YES,bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64streamstart"]) {
             WLLog(@"=====b64 streaming start !");
-//        self.dataToDownload = [[NSMutableData alloc] init];
             [self.dataStream open];
+            if(self.dataLoadCompletionHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_StreamStart handlerResult:body.value];
+                self.dataLoadCompletionHandler(YES,bod,nil);
+            }
 
         }else if([body.type isEqualToString:@"b64streaming"]) {
             double progress = body.received.doubleValue/body.total.doubleValue;
             WLLog(@"=====b64 streaming %.2f...", progress);
-//        [self.dataToDownload appendData:data];
             NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
             NSUInteger dataLength = [data length];
             NSInteger writeLen = [self.dataStream write:[data bytes] maxLength:dataLength];
@@ -392,6 +431,12 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                 self.streamError = [self.dataStream streamError];
                 [self.dataStream close];
                 self.dataStream = nil;
+                return;
+            }
+
+            if(self.dataLoadCompletionHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Streaming handlerResult:@(progress)];
+                self.dataLoadCompletionHandler(YES,bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64streamend"]) {
@@ -401,26 +446,18 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
                 self.dataStream = nil;
             }
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,self.streamFilePath,self.streamError);
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_StreamEnd handlerResult:self.streamFilePath];
+                self.dataLoadCompletionHandler(YES,bod,self.streamError);
             }
 
-        }
-
-    }else if([message.name isEqualToString:@"clipboard"]) { //获取剪贴板内容
-
-        if(!message.body || ![message.body isKindOfClass:[NSDictionary class]]){
+        }else if([body.type isEqualToString:@"error"]){
             if(self.dataLoadCompletionHandler){
-                self.dataLoadCompletionHandler(YES,nil, [NSError errorWithDomain:@"获取粘贴板数据失败" code:0 userInfo:nil]);
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Error handlerResult:body.value];
+                self.dataLoadCompletionHandler(YES,bod,nil);
             }
-            return;
         }
 
-        WLMessageBody *body = [[WLMessageBody alloc] initWithDictionary:message.body];
-        if(self.dataLoadCompletionHandler){
-            self.dataLoadCompletionHandler(YES,body.value,nil);
-        }
-
-    } else if([message.name isEqualToString:@"nativelog"]){
+    }else if([message.name isEqualToString:@"nativelog"]){
         WLLog(@"=====nativelog:%@",message.body);
     }
 
@@ -453,7 +490,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 + (instancetype)buildWebViewWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody
                                   parentView:(UIView *_Nonnull)parentView
-                   dataLoadCompletionHandler:(void (^)(BOOL, id, NSError *))dataLoadCompletionHandler
+                   dataLoadCompletionHandler:(void (^)(BOOL, WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler
                          jsCompletionHandler:(void (^)(id, NSError *))jsCompletionHandler {
 
     WKWebViewConfiguration *webConfiguration = [[WKWebViewConfiguration alloc] init];
@@ -468,11 +505,6 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler messageHandleWithEvaluateBody:evaluateBody dataLoadCompletionHandler:dataLoadCompletionHandler];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"bridge"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"clipboard"];
-//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"plaintext"];
-//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64text"];
-//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamstart"];
-//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streaming"];
-//    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"b64streamend"];
     [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"nativelog"];
 
     WLWebView *webView = [[WLWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:webConfiguration];
@@ -485,16 +517,18 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 - (void)dealloc {
     WLLog(@"===========dealloc WLWebView ");
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"bridge"];
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"clipboard"];
-//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"plaintext"];
-//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64text"];
-//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64streamstart"];
-//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64streaming"];
-//    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"b64streamend"];
-    [self.webConfiguration.userContentController removeScriptMessageHandlerForName:@"nativelog"];
+    if(@available(iOS 11.0,*)){
+        [self.configuration.userContentController removeAllContentRuleLists];
+    }
+    [self.configuration.userContentController removeAllUserScripts];
+    [self.configuration.userContentController removeScriptMessageHandlerForName:@"bridge"];
+    [self.configuration.userContentController removeScriptMessageHandlerForName:@"clipboard"];
+    [self.configuration.userContentController removeScriptMessageHandlerForName:@"nativelog"];
 }
 
+- (void)webView:(WKWebView *)webView didStartProvisionalNavigation:(null_unspecified WKNavigation *)navigation{
+    WLLog(@"===========webview didStartProvisionalNavigation : %@",webView.URL.absoluteString);
+}
 
 /*
 // 在发送请求之前，决定是否跳转
@@ -511,24 +545,27 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 - (void)webView:(WKWebView *)webView didStartProvisionalNavigation:(WKNavigation *)navigation{
     WLLog(@"===========webView didStartProvisionalNavigation");
 }
+*/
 // 当内容开始返回时调用 内容开始到达主帧时被调用（即将完成）
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
-    WLLog(@"===========webview didCommitNavigation");
+    WLLog(@"===========webview didCommitNavigation : %@",webView.URL.absoluteString);
+
 }
-*/
+
 
 // 页面加载完成之后调用
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    WLLog(@"===========webview didFinishNavigation");
+    WLLog(@"===========webview didFinishNavigation : %@",webView.URL.absoluteString);
 
+    __weak typeof(self) weakSelf = self;
     [self evaluateJavaScript:self.evaluateBody.jsCode completionHandler:^(id o, NSError *error) {
-        if (self.evaluateJSCompletionHandler) {
-            self.evaluateJSCompletionHandler(o, error);
+        weakSelf.didCommitNavigation = YES;
+        if (weakSelf.evaluateJSCompletionHandler) {
+            weakSelf.evaluateJSCompletionHandler(o, error);
         }
     }];
 
     [self showWebCachePath];
-
 }
 
 - (void)showWebCachePath {

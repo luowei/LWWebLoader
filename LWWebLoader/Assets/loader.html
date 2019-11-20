@@ -5,32 +5,6 @@
     <title></title>
     <script type="text/javascript">
 
-        function getClipboardText(requestId){
-            console.log('===requestId:'+requestId);
-/*
-            if (window.isSecureContext) {
-                //iOS webview 不支持navigator.clipboard
-                navigator.clipboard.readText().then(clipText => {
-                    let response = {
-                        requestId : requestId,
-                        value : clipText
-                    };
-                    window.webkit.messageHandlers.clipboard.postMessage(response);
-
-                }).catch(err => {
-                    console.error('Failed to read clipboard contents: ', err);
-                    let response = {
-                        requestId : requestId,
-                        value : err
-                    };
-                    window.webkit.messageHandlers.clipboard.postMessage(response);
-                });
-            }
-*/
-
-            return null;
-        }
-
         /**
          * @return {string}
          */
@@ -53,13 +27,18 @@
             return window.btoa( binary );
         }
 
-        function base64ToArrayBuffer(base64) {
-            let binary_string =  window.atob(base64);
+        function base64ToUint8Array(base64) {
+            let binary_string = window.atob(base64);
             let len = binary_string.length;
-            let bytes = new Uint8Array( len );
-            for (let i = 0; i < len; i++)        {
+            let bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
                 bytes[i] = binary_string.charCodeAt(i);
             }
+            return bytes;
+        }
+
+        function base64ToArrayBuffer(base64) {
+            let bytes = base64ToUint8Array(base64);
             return bytes.buffer;
         }
 
@@ -73,6 +52,18 @@
             return typeof obj[Symbol.iterator] === 'function';
         }
 
+        function getFormattedTime() {
+            var today = new Date();
+            var y = today.getFullYear();
+            // JavaScript months are 0-based.
+            var m = today.getMonth() + 1;
+            var d = today.getDate();
+            var h = today.getHours();
+            var mi = today.getMinutes();
+            var s = today.getSeconds();
+            return '' + y + m + d + h + mi + s;
+        }
+
         function outputData(requestId,data) {
             let contentType = data.contentType;
             let response = {requestId: requestId};
@@ -84,6 +75,9 @@
                 response.type = 'plaintext';
                 response.value = data.value;
                 window.webkit.messageHandlers.bridge.postMessage(response);
+            }else if(contentType.includes('error')){
+                response.type = 'error';
+                response.value = data.value;
             } else {
                 response.type = 'b64text';
                 response.value = arrayBufferToBase64(data.value);
@@ -154,12 +148,17 @@
         }
 
         //Upload Json Data
-        function uploadJson(requestId, url, requestInit, postData, b64Str) {
+        function uploadData(requestId, url, requestInit, postData, b64Str) {
             const fd = new FormData();
-            fd.append('file', base64ToArrayBuffer(b64Str));
+            let arrBuf = base64ToArrayBuffer(b64Str);
+            let filename = postData['filename'] ? postData['filename'] : getFormattedTime();
+            fd.append('file', new Blob([arrBuf]),filename);
 
             if (isDict(postData) && isIterable(postData)) {
                 for (let item in postData) {
+                    if(item === 'filename'){
+                        continue;
+                    }
                     fd.append(item, postData[item]);
                 }
             }

@@ -22,6 +22,12 @@
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
 
+    UIButton *btn0 = [UIButton buttonWithType:UIButtonTypeSystem];
+    btn0.frame = CGRectMake(100, 100, 160, 40);
+    [btn0 setTitle:@"打开新页" forState:UIControlStateNormal];
+    [self.view addSubview:btn0];
+    [btn0 addTarget:self action:@selector(btn0Action) forControlEvents:UIControlEventTouchUpInside];
+
     UIButton *btn1 = [UIButton buttonWithType:UIButtonTypeSystem];
     btn1.frame = CGRectMake(100, 150, 160, 40);
     [btn1 setTitle:@"getData" forState:UIControlStateNormal];
@@ -68,14 +74,18 @@
 
 
 -(LWWebLoader *)webloader {
+    _webloader = LWWebLoader.webloader;
+    return _webloader;
+/*
     if(!_webloader){
         _webloader = LWWebLoader.webloader;
     }
     return _webloader;
+*/
 }
 
 - (void)writeToFileWithData:(NSData *)data {
-    NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"influence.pdf"];
+    NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"aaaa.zip"];
     NSError *err;
     [(NSData *)data writeToFile:filePath options:NSDataWritingAtomic error:&err];
     if(err){
@@ -86,71 +96,65 @@
 }
 
 
+- (void)btn0Action {
+
+}
+
 - (void)getBtnAction {
-//    NSString *urlString = @"http://mytest.com/test.json";
+    NSString *urlString = @"http://mytest.com/test.json";
 //    NSString *urlString = @"http://mytest.com/mitm.html";
 //    NSString *urlString = @"http://mytest.com/DeepRPC.zip";
-    NSString *urlString = @"http://mytest.com/influence.pdf";
 //    NSString *urlString = @"http://wodedata.com/MyResource/MyInputMethod/App/OtherVC_v14.json";
 
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:GetData methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result,NSError *error){
+    __weak typeof(self) weakSelf = self;
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,WLHanderBody *body,NSError *error){
         if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            NSLog(@"======error:%@\n", error);
             return;
         }
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========getData return text:%@", result);
-        }else if([result isKindOfClass:[NSDictionary class]]){
-            NSLog(@"==========getData return dict:%@", result);
-        }else if([result isKindOfClass:[NSData class]]){
-            [self writeToFileWithData:result];
-        }
+
+        [weakSelf handleWithBody:body];
     }];
 }
 
 - (void)postBtnAction {
 //    NSString *urlString = @"http://mytest.com/test.json";
-    NSString *urlString = @"http://mytest.com/influence.pdf";
+    NSString *urlString = @"http://mytest.com/test.zip";
 
     NSString *contentType = @"application/json";
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:PostData methodArguments:nil userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, id result, NSError *error) {
+    __weak typeof(self) weakSelf = self;
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, WLHanderBody *body, NSError *error) {
         if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            NSLog(@"======error:%@\n",error);
             return;
         }
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========postData return text:%@", result);
-        }else if([result isKindOfClass:[NSDictionary class]]){
-            NSLog(@"==========postData return dict:%@", result);
-        }else if([result isKindOfClass:[NSData class]]){
-            [self writeToFileWithData:result];
-        }
+
+        [weakSelf handleWithBody:body];
+
     }];
 }
+
 
 - (void)uploadBtnAction {
 //    NSString *urlString = @"http://mytest.com/test.json";
     NSString *urlString = @"http://mytest.com:8000";
 
-    NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"influence.pdf"];
+    NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"aaaa.zip"];
 
     NSString *contentType = nil;
     NSData *uploadData = [NSData dataWithContentsOfFile:filePath];
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:UploadData methodArguments:nil userAgent:nil contentType:contentType postData:@{@"name":@"张三"} uploadData:uploadData];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, id result, NSError *error) {
+    NSDictionary *postData = @{@"filename":@"aaaa.zip",@"name":@"张三"};
+    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:UploadData methodArguments:nil userAgent:nil contentType:contentType postData:postData uploadData:uploadData];
+    __weak typeof(self) weakSelf = self;
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL b, WLHanderBody *body, NSError *error) {
         if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            NSLog(@"======error:%@\n", error);
             return;
         }
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========uploadData return text:%@", result);
-        }else if([result isKindOfClass:[NSDictionary class]]){
-            NSLog(@"==========uploadData return dict:%@", result);
-        }else if([result isKindOfClass:[NSData class]]){
-            [self writeToFileWithData:result];
-        }
+
+        [weakSelf handleWithBody:body];
     }];
 }
 
@@ -158,19 +162,15 @@
 
     NSString *urlString = @"http://mytest.com/test.zip";
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadFile methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+    __weak typeof(self) weakSelf = self;
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,WLHanderBody *body, NSError *error) {
         //处理文件，result为NSData
         if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            NSLog(@"======error:%@\n", error);
             return;
         }
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========uploadData return text:%@", result);
-        }else if([result isKindOfClass:[NSDictionary class]]){
-            NSLog(@"==========uploadData return dict:%@", result);
-        }else if([result isKindOfClass:[NSData class]]){
-            [self writeToFileWithData:result];
-        }
+
+        [weakSelf handleWithBody:body];
     }];
 
 }
@@ -180,51 +180,81 @@
     NSString *urlString = @"http://oss.wodedata.com/Fonts/%E5%8D%8E%E6%96%87%E9%9A%B6%E4%B9%A6.ttf";
 //    NSString *urlString = @"http://mytest.com/test.zip";
     WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:urlString method:DownloadStream methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+    __weak typeof(self) weakSelf = self;
+    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,WLHanderBody *body, NSError *error) {
         //处理文件，data为文件路径
         if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
+            NSLog(@"======error:%@\n", error);
             return;
         }
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========文件的文件保存的路径为:%@", result);
-        }
+
+        [weakSelf handleWithBody:body];
     }];
 
 }
 
 -(void)getClipboardTextBtnAction {
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:nil method:GetClipboardText methodArguments:nil userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
-        //处理文件，data为文件路径
-        if (error) {
-            NSLog(@"======error:%@\n%@", error.localizedFailureReason, error.localizedDescription);
-            return;
-        }
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========从粘贴板获得:%@", result);
-        }
-    }];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
-    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:nil method:NativeLog methodArguments:@"aaaaaaaaa" userAgent:nil contentType:nil postData:nil uploadData:nil];
-    [LWWebLoader.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
-        if ([result isKindOfClass:[NSString class]]) {
-            NSLog(@"==========log:%@", result);
-        }
-    }];
+    NSLog(@"======tem dir:%@",NSTemporaryDirectory());
+
+//    WLEvaluateBody *evaluateBody = [LWWebLoader bodyWithURLString:nil method:NativeLog methodArguments:@"aaaaaaaaa" userAgent:nil contentType:nil postData:nil uploadData:nil];
+//    [self.webloader evaluateWithBody:evaluateBody parentView:self.view dataLoadCompletionHandler:^(BOOL finish,id result, NSError *error) {
+//        if ([result isKindOfClass:[NSString class]]) {
+//            NSLog(@"==========log:%@", result);
+//        }
+//    }];
 
 }
 
 -(void)safariVCBtnAction{
-    SFSafariViewController *safariVC = [[SFSafariViewController alloc] initWithURL:[NSURL URLWithString:@"http://wodedata.com.com"] entersReaderIfAvailable:YES];
+    SFSafariViewController *safariVC = [[SFSafariViewController alloc] initWithURL:[NSURL URLWithString:@"http://wodedata.com"] entersReaderIfAvailable:YES];
     safariVC.delegate = self;
     [self presentViewController:safariVC animated:YES completion:nil];
 }
 
+
+
+- (void)handleWithBody:(WLHanderBody *)body {
+    switch (body.bodyType) {
+        case BodyType_Error: {
+            NSLog(@"======error:%@\n", body.handlerResult);
+            break;
+        }
+        case BodyType_Json: {
+            NSLog(@"==========handlerBody json:%@", body.handlerResult);
+            break;
+        }
+        case BodyType_PlainText: {
+            NSLog(@"==========handlerBody text:%@", body.handlerResult);
+            break;
+        }
+        case BodyType_Data: {
+            [self writeToFileWithData:body.handlerResult];
+            break;
+        }
+        case BodyType_StreamStart: {
+            NSLog(@"==========stream start:%@", body.handlerResult);
+            break;
+        }
+        case BodyType_Streaming: {
+            NSLog(@"==========streaming :%.2f ...", [body.handlerResult doubleValue]);
+            break;
+        }
+        case BodyType_StreamEnd: {
+            NSLog(@"==========streamed file path:%@", body.handlerResult);
+            break;
+        }
+
+        case BodyType_Other:
+        default: {
+            break;
+        }
+    }
+}
 
 #pragma mark - SFSafariViewControllerDelegate
 
