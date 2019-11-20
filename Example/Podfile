@@ -1,0 +1,10 @@
+use_frameworks!
+
+platform :ios, '9.0'
+
+target 'LWWebLoader_Example' do
+  pod 'LWWebLoader', :path => '../'
+
+  # pod 'WebViewJavascriptBridge', '~> 6.0.3'
+
+end

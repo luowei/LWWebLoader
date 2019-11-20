@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script type="text/javascript">
+
+        function getClipboardText(requestId){
+            console.log('===requestId:'+requestId);
+/*
+            if (window.isSecureContext) {
+                //iOS webview 不支持navigator.clipboard
+                navigator.clipboard.readText().then(clipText => {
+                    let response = {
+                        requestId : requestId,
+                        value : clipText
+                    };
+                    window.webkit.messageHandlers.clipboard.postMessage(response);
+
+                }).catch(err => {
+                    console.error('Failed to read clipboard contents: ', err);
+                    let response = {
+                        requestId : requestId,
+                        value : err
+                    };
+                    window.webkit.messageHandlers.clipboard.postMessage(response);
+                });
+            }
+*/
+
+            return null;
+        }
+
+        /**
+         * @return {string}
+         */
+        function Uint8ToString(u8a){
+            let CHUNK_SZ = 0x8000;
+            let c = [];
+            for (let i=0; i < u8a.length; i+=CHUNK_SZ) {
+                c.push(String.fromCharCode.apply(null, u8a.subarray(i, i+CHUNK_SZ)));
+            }
+            return c.join("");
+        }
+
+        function arrayBufferToBase64( buffer ) {
+            let binary = '';
+            let bytes = new Uint8Array( buffer );
+            let len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode( bytes[ i ] );
+            }
+            return window.btoa( binary );
+        }
+
+        function base64ToArrayBuffer(base64) {
+            let binary_string =  window.atob(base64);
+            let len = binary_string.length;
+            let bytes = new Uint8Array( len );
+            for (let i = 0; i < len; i++)        {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function isDict(v) {
+            return typeof v==='object' && v!==null && !(v instanceof Array) && !(v instanceof Date);
+        }
+        function isIterable(obj) {
+            if (obj == null) {
+                return false;
+            }
+            return typeof obj[Symbol.iterator] === 'function';
+        }
+
+        function outputData(requestId,data) {
+            let contentType = data.contentType;
+            let response = {requestId: requestId};
+            if (contentType.includes('application/json')) {
+                response.type = 'json';
+                response.value = data.value;
+                window.webkit.messageHandlers.bridge.postMessage(response);
+            } else if (contentType.includes('text')) {
+                response.type = 'plaintext';
+                response.value = data.value;
+                window.webkit.messageHandlers.bridge.postMessage(response);
+            } else {
+                response.type = 'b64text';
+                response.value = arrayBufferToBase64(data.value);
+                window.webkit.messageHandlers.bridge.postMessage(response);
+            }
+
+            console.log('response native:', JSON.stringify(response));
+
+        }
+
+        function loadData(requestId, url, requestInit) {
+            fetch(url, requestInit).then(res => {
+
+                let contentType = res.headers.get('content-type');
+                if (contentType.includes('application/json')) {
+                    return {
+                        contentType: contentType,
+                        value: res.json()
+                    };
+                } else if (contentType.includes('text')) {
+                    return {
+                        contentType: contentType,
+                        value: res.text()
+                    };
+                } else {
+                    return {
+                        contentType: contentType,
+                        value: res.arrayBuffer()
+                    };
+                }
+
+            }).catch(error => {
+                console.error('Error:', error);
+                return {
+                    contentType: 'error',
+                    value: error
+                };
+
+            }).then(data => {
+
+                if (data.value && typeof data.value.then === 'function') {
+                    return data.value.then(resp => {
+                        return {
+                            contentType: data.contentType,
+                            value: resp
+                        };
+                    });
+                } else {
+                    outputData(requestId, data);
+                }
+
+            }).then(data => {
+                outputData(requestId, data)
+            });
+        }
+
+        //GET
+        //参考: https://developer.mozilla.org/zh-TW/docs/Web/API/Fetch_API/Using_Fetch
+        function getData(requestId, url, requestInit) {
+            loadData(requestId, url, requestInit);
+
+        }
+
+        //POST
+        //参考：https://zhuanlan.zhihu.com/p/34291688
+        function postData(requestId, url, requestInit) {
+            loadData(requestId, url, requestInit);
+        }
+
+        //Upload Json Data
+        function uploadJson(requestId, url, requestInit, postData, b64Str) {
+            const fd = new FormData();
+            fd.append('file', base64ToArrayBuffer(b64Str));
+
+            if (isDict(postData) && isIterable(postData)) {
+                for (let item in postData) {
+                    fd.append(item, postData[item]);
+                }
+            }
+            requestInit['body'] = fd;
+
+            loadData(requestId, url, requestInit);
+
+
+/*
+            //参考：https://stackoverflow.com/questions/35711724/upload-progress-indicators-for-fetch
+            function consume(reader) {
+                var total = 0
+                return new Promise((resolve, reject) => {
+                    function pump() {
+                        reader.read().then(({done, value}) => {
+                            if (done) {
+                                resolve()
+                                return
+                            }
+                            total += value.byteLength
+                            log(`received ${value.byteLength} bytes (${total} bytes in total)`)
+                            pump()
+                        }).catch(reject)
+                    }
+                    pump()
+                })
+            }
+
+            fetch("/music/pk/altes-kamuffel.flac")
+                .then(res => consume(res.body.getReader()))
+                .then(() => log("consumed the entire body without keeping the whole thing in memory!"))
+                .catch(e => log("something went wrong: " + e))
+*/
+
+        }
+
+        //download File
+        function downloadFile(requestId, url, requestInit) {
+            loadData(requestId, url, requestInit);
+        }
+
+        //download Stream
+        function downloadStream(requestId, url, requestInit) {
+
+            fetch(url,requestInit).then(res => {
+                let reader = res.body.getReader();
+                const totalLength = +res.headers.get('Content-Length');
+                let receivedLength = 0;
+                let chrunkOrder = 0;
+
+                window.webkit.messageHandlers.bridge.postMessage({
+                    requestId: requestId,
+                    type: 'b64streamstart',
+                    total: totalLength,
+                    received: receivedLength,
+                    value: '',
+                });
+
+                let pump = () => reader.read()
+                    .then(response => {
+                        if (response.done) {
+
+                            window.webkit.messageHandlers.bridge.postMessage({
+                                requestId: requestId,
+                                type: 'b64streamend',
+                                done: true,
+                                total: totalLength,
+                                received: totalLength,
+                                value: '',
+                            });
+                            return null;
+
+                        } else { // value for fetch streams is a Uint8Array
+                            let responseValue = response.value;
+                            receivedLength += responseValue.length;
+                            let b64encoded = arrayBufferToBase64(responseValue.buffer);
+                            window.webkit.messageHandlers.bridge.postMessage({
+                                requestId: requestId,
+                                type: 'b64streaming',
+                                chrunkOrder: chrunkOrder,
+                                total: totalLength,
+                                received: receivedLength,
+                                value: b64encoded,
+                            });
+                            chrunkOrder++;
+                            return pump();
+                        }
+
+                    })
+                    .catch(function (error) {
+                        return error;
+                    });
+
+                pump();
+
+            }).catch(error => {
+                console.error('Error:', error);
+                window.webkit.messageHandlers.bridge.postMessage({
+                    requestId: requestId,
+                    type: 'b64streamend',
+                    done: false,
+                    total: 0,
+                    received: 0,
+                    value: '',
+                });
+
+            })
+
+        }
+
+
+
+    </script>
+</head>
+<body>
+<script type="text/javascript">
+
+
+</script>
+
+<h1> Hello</h1>
+
+</body>
+</html>
