@@ -70,6 +70,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 @interface LWWebLoader ()
 @property(nonatomic, weak) WLWebView *webview;
+@property(nonatomic, weak) WSWebView *wsWebview;
 @end
 
 @implementation LWWebLoader {
@@ -213,6 +214,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 
 
+/*
 - (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView jsExcuteCompletionHandler:(void (^)(id, NSError *error))jsExcuteCompletionHandler {
 
     BOOL isSameHost = [self.webview.URL.host isEqualToString:evaluateBody.url.host];
@@ -240,15 +242,16 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 
 }
+*/
 
 
-- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull,NSError *))dataLoadCompletionHandler {
+- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(WLHanderBody *_Nonnull,NSError *))dataLoadCompletionHandler {
     BOOL isSameHost = [self.webview.URL.host isEqualToString:evaluateBody.url.host] && self.webview.URL.port.integerValue == evaluateBody.url.port.integerValue;
     if(!self.webview || !self.webview.didCommitNavigation || !isSameHost){
         __weak typeof(self) weakSelf = self;
-        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:^(BOOL finish,WLHanderBody *result,NSError *error){
+        self.webview = [WLWebView buildWebViewWithEvaluateBody:evaluateBody parentView:parentView dataLoadCompletionHandler:^(WLHanderBody *result,NSError *error){
             if(dataLoadCompletionHandler){
-                dataLoadCompletionHandler(finish,result,error);
+                dataLoadCompletionHandler(result,error);
             }
             [weakSelf.webview removeFromSuperview];
             weakSelf.webview = nil;
@@ -302,6 +305,97 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 */
 }
 
+- (void)wsLoadPageWithBaseURL:(NSURL *_Nonnull)baseURL {
+
+    NSBundle *bundle =  ([NSBundle bundleWithPath:[[NSBundle bundleForClass:[self class]] pathForResource:@"LWWebLoader" ofType:@"bundle"]] ?: ([NSBundle bundleWithPath:[[NSBundle mainBundle] pathForResource:@"WLWebLoader " ofType:@"bundle"]] ?: [NSBundle mainBundle]));
+    NSURL *fileURL = [bundle URLForResource:@"websocket" withExtension:@"html"];
+
+    NSData *data = [NSData dataWithContentsOfURL:fileURL];
+    if(!data){
+        return;
+    }
+    NSString *faildText = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if(!faildText){
+        return;
+    }
+
+    [self.wsWebview loadHTMLString:faildText baseURL:baseURL];
+}
+
+
+-(void)startWSWebViewWithParentView:(UIView *)parentView receiveWSDataHandler:(void (^)(WLHanderBody *_Nonnull data,NSError *error))receiveWSDataHandler {
+    if(!self.wsWebview){
+        self.wsWebview = [WSWebView buildWebViewWithParentView:parentView receiveWSDataHandler:receiveWSDataHandler];
+    }
+    [self wsLoadPageWithBaseURL:[NSURL URLWithString:@"http://localhost"]];
+}
+
+-(void)removeWSWebView {
+    [self.wsWebview removeFromSuperview];
+    self.wsWebview = nil;
+}
+
+-(void)wsConnect {
+    [self.wsWebview evaluateJavaScript:@"socket.connect();" completionHandler:^(id o, NSError *error) {
+        if(error){
+            WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+            return;
+        }
+    }];
+}
+
+-(void)wsSendData:(NSData *)data {
+    NSString *b64 = [data base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed] ?: @"";
+    NSString *jsCode = [NSString stringWithFormat:@"socket.sendData('%@');",b64];
+    [self.wsWebview evaluateJavaScript:jsCode completionHandler:^(id o, NSError *error) {
+        if(error){
+            WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+            return;
+        }
+    }];
+}
+
+-(void)wsSendString:(NSString *)string {
+    NSString *jsCode = [NSString stringWithFormat:@"socket.sendString('%@');",string];
+    [self.wsWebview evaluateJavaScript:jsCode completionHandler:^(id o, NSError *error) {
+        if(error){
+            WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+            return;
+        }
+    }];
+}
+
+-(void)wsSendStreamStart {
+    NSString *jsCode = [NSString stringWithFormat:@"socket.sendStreamStart();"];
+    [self.wsWebview evaluateJavaScript:jsCode completionHandler:^(id o, NSError *error) {
+        if(error){
+            WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+            return;
+        }
+    }];
+}
+
+-(void)wsSendStreaming:(NSData *)data {
+    NSString *b64 = [data base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed] ?: @"";
+    NSString *jsCode = [NSString stringWithFormat:@"socket.sendStreaming('%@');",b64];
+    [self.wsWebview evaluateJavaScript:jsCode completionHandler:^(id o, NSError *error) {
+        if(error){
+            WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+            return;
+        }
+    }];
+}
+
+-(void)wsSendStreamEnd {
+    NSString *jsCode = [NSString stringWithFormat:@"socket.sendStreamEnd();"];
+    [self.wsWebview evaluateJavaScript:jsCode completionHandler:^(id o, NSError *error) {
+        if(error){
+            WLLog(@"%s: error: %@", __func__, error.localizedDescription);
+            return;
+        }
+    }];
+}
+
 - (void)dealloc {
     WLLog(@"======== dealloc LWWebLoader");
 }
@@ -320,13 +414,13 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 @interface LWWLWKScriptMessageHandler : NSObject <WKScriptMessageHandler>
 //@property(nonatomic, strong) NSMutableData *dataToDownload;
 @property(nonatomic, strong) NSOutputStream *dataStream;
-@property(nonatomic, copy) void (^dataLoadCompletionHandler)(BOOL,WLHanderBody *_Nonnull, NSError *);
+@property(nonatomic, copy) void (^dataLoadCompletionHandler)(WLHanderBody *_Nonnull, NSError *);
 
 @property(nonatomic, copy) NSString *streamFilePath;
 
 @property(nonatomic, strong) NSError *streamError;
 
-+ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler;
++ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler;
 
 - (void)streamFilePathWithFileName:(NSString *)fileName;
 @end
@@ -340,7 +434,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     WLLog(@"===========dealloc LWWLWKScriptMessageHandler ");
 }
 
-+ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler {
++ (LWWLWKScriptMessageHandler *)messageHandleWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody dataLoadCompletionHandler:(void (^)(WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler {
     LWWLWKScriptMessageHandler *messageHandler = [LWWLWKScriptMessageHandler new];
     messageHandler.dataLoadCompletionHandler = dataLoadCompletionHandler;
     [messageHandler streamFilePathWithFileName:evaluateBody.requestId];
@@ -380,14 +474,14 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
         if(!message.body){
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *body = [WLHanderBody bodyWithId:@"-1" bodyType:BodyType_Error handlerResult:nil];
-                self.dataLoadCompletionHandler(YES,body, [NSError errorWithDomain:@"数据为空" code:0 userInfo:nil]);
+                self.dataLoadCompletionHandler(body, [NSError errorWithDomain:@"数据为空" code:0 userInfo:nil]);
             }
             return;
 
         }else if(![message.body isKindOfClass:[NSDictionary class]]){
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *body = [WLHanderBody bodyWithId:@"-1" bodyType:BodyType_Error handlerResult:nil];
-                self.dataLoadCompletionHandler(YES,body,[NSError errorWithDomain:@"数据格式错误" code:0 userInfo:nil]);
+                self.dataLoadCompletionHandler(body,[NSError errorWithDomain:@"数据格式错误" code:0 userInfo:nil]);
             }
             return;
         }
@@ -396,20 +490,20 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
         if([body.type isEqualToString:@"json"]) {
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Json handlerResult:body.value];
-                self.dataLoadCompletionHandler(YES,bod,nil);
+                self.dataLoadCompletionHandler(bod,nil);
             }
 
         }else if([body.type isEqualToString:@"plaintext"]) {
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_PlainText handlerResult:body.value];
-                self.dataLoadCompletionHandler(YES,bod,nil);
+                self.dataLoadCompletionHandler(bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64text"]) {
             NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Data handlerResult:data];
-                self.dataLoadCompletionHandler(YES,bod,nil);
+                self.dataLoadCompletionHandler(bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64streamstart"]) {
@@ -417,7 +511,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
             [self.dataStream open];
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_StreamStart handlerResult:body.value];
-                self.dataLoadCompletionHandler(YES,bod,nil);
+                self.dataLoadCompletionHandler(bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64streaming"]) {
@@ -436,7 +530,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Streaming handlerResult:@(progress)];
-                self.dataLoadCompletionHandler(YES,bod,nil);
+                self.dataLoadCompletionHandler(bod,nil);
             }
 
         }else if([body.type isEqualToString:@"b64streamend"]) {
@@ -447,13 +541,13 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
             }
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_StreamEnd handlerResult:self.streamFilePath];
-                self.dataLoadCompletionHandler(YES,bod,self.streamError);
+                self.dataLoadCompletionHandler(bod,self.streamError);
             }
 
         }else if([body.type isEqualToString:@"error"]){
             if(self.dataLoadCompletionHandler){
                 WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Error handlerResult:body.value];
-                self.dataLoadCompletionHandler(YES,bod,nil);
+                self.dataLoadCompletionHandler(bod,nil);
             }
         }
 
@@ -490,7 +584,7 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
 
 + (instancetype)buildWebViewWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody
                                   parentView:(UIView *_Nonnull)parentView
-                   dataLoadCompletionHandler:(void (^)(BOOL, WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler
+                   dataLoadCompletionHandler:(void (^)(WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler
                          jsCompletionHandler:(void (^)(id, NSError *))jsCompletionHandler {
 
     WKWebViewConfiguration *webConfiguration = [[WKWebViewConfiguration alloc] init];
@@ -578,6 +672,165 @@ static NSString *const defaultUA = @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_1
     WLLog(@"==========webkit folder: %@",webKitFolderInCachesfs);
 }
 
+@end
+
+
+
+@interface WSWKScriptMessageHandler : NSObject <WKScriptMessageHandler>
+@property(nonatomic, copy) void (^receiveWSDataHandler)(WLHanderBody *_Nonnull, NSError *);
+@property(nonatomic, strong) NSOutputStream *dataStream;
+@property(nonatomic, copy) NSString *streamFilePath;
+@property(nonatomic, strong) NSError *streamError;
+@end
+
+@implementation WSWKScriptMessageHandler
++(instancetype)buildMessageHandleWithReceiveWSDataHandler:(void (^)(WLHanderBody *_Nonnull data,NSError *error))receiveWSDataHandler {
+    WSWKScriptMessageHandler *messageHandler = [WSWKScriptMessageHandler new];
+    messageHandler.receiveWSDataHandler = receiveWSDataHandler;
+    return messageHandler;
+}
+
+- (void)dealloc {
+    WLLog(@"===========dealloc WSWKScriptMessageHandler ");
+}
+
+-(NSString *)streamFilePath {
+    if(!_streamFilePath){
+        _streamFilePath = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    }
+    return _streamFilePath;
+}
+
+-(NSOutputStream *)dataStream {
+    if(!_dataStream){
+        _dataStream = [[NSOutputStream alloc] initToFileAtPath:self.streamFilePath append:YES];
+    }
+    return _dataStream;
+}
+
+- (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
+    if([message.name isEqualToString:@"bridge"]){
+
+        if(!message.body){
+            if(self.receiveWSDataHandler){
+                WLHanderBody *body = [WLHanderBody bodyWithId:@"-1" bodyType:BodyType_Error handlerResult:nil];
+                self.receiveWSDataHandler(body, [NSError errorWithDomain:@"数据为空" code:0 userInfo:nil]);
+            }
+            return;
+
+        }else if(![message.body isKindOfClass:[NSDictionary class]]){
+            if(self.receiveWSDataHandler){
+                WLHanderBody *body = [WLHanderBody bodyWithId:@"-1" bodyType:BodyType_Error handlerResult:nil];
+                self.receiveWSDataHandler(body,[NSError errorWithDomain:@"数据格式错误" code:0 userInfo:nil]);
+            }
+            return;
+        }
+
+        WLMessageBody *body = [[WLMessageBody alloc] initWithDictionary:message.body];
+        if([body.type isEqualToString:@"json"]) {
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Json handlerResult:body.value];
+                self.receiveWSDataHandler(bod,nil);
+            }
+
+        }else if([body.type isEqualToString:@"plaintext"]) {
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_PlainText handlerResult:body.value];
+                self.receiveWSDataHandler(bod,nil);
+            }
+
+        }else if([body.type isEqualToString:@"b64text"]) {
+            NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Data handlerResult:data];
+                self.receiveWSDataHandler(bod,nil);
+            }
+
+        }else if([body.type isEqualToString:@"b64streamstart"]) {
+            WLLog(@"=====b64 streaming start !");
+            [self.dataStream open];
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_StreamStart handlerResult:body.value];
+                self.receiveWSDataHandler(bod,nil);
+            }
+
+        }else if([body.type isEqualToString:@"b64streaming"]) {
+            WLLog(@"=====b64 streaming ...");
+            NSData *data = [[NSData alloc] initWithBase64EncodedString:body.value options:0];
+            NSUInteger dataLength = [data length];
+            NSInteger writeLen = [self.dataStream write:[data bytes] maxLength:dataLength];
+            if(dataLength > writeLen){
+                self.streamFilePath = nil;
+                self.streamError = [self.dataStream streamError];
+                [self.dataStream close];
+                self.dataStream = nil;
+                return;
+            }
+
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Streaming handlerResult:nil];
+                self.receiveWSDataHandler(bod,nil);
+            }
+
+        }else if([body.type isEqualToString:@"b64streamend"]) {
+            WLLog(@"=====b64 streaming finish !");
+            if(self.dataStream && self.dataStream.streamStatus != NSStreamStatusClosed){
+                [self.dataStream close];
+                self.dataStream = nil;
+            }
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_StreamEnd handlerResult:self.streamFilePath];
+                self.receiveWSDataHandler(bod,self.streamError);
+            }
+
+        }else if([body.type isEqualToString:@"error"]){
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_Error handlerResult:body.value];
+                self.receiveWSDataHandler(bod,nil);
+            }
+        }else if([body.type isEqualToString:@"ws_opened"]){
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_WSOpened handlerResult:nil];
+                self.receiveWSDataHandler(bod,nil);
+            }
+        }else if([body.type isEqualToString:@"ws_closed"]){
+            if(self.receiveWSDataHandler){
+                WLHanderBody *bod = [WLHanderBody bodyWithId:body.requestId bodyType:BodyType_WSClosed handlerResult:nil];
+                self.receiveWSDataHandler(bod,nil);
+            }
+        }
+
+    }else if([message.name isEqualToString:@"nativelog"]){
+        WLLog(@"=====nativelog:%@",message.body);
+    }
+}
+@end
+
+@implementation WSWebView
++ (instancetype)buildWebViewWithParentView:(UIView *)parentView receiveWSDataHandler:(void (^)(WLHanderBody *_Nonnull data,NSError *error))receiveWSDataHandler {
+    WKWebViewConfiguration *webConfiguration = [[WKWebViewConfiguration alloc] init];
+    webConfiguration.userContentController = [WKUserContentController new];
+    webConfiguration.processPool = [[WKProcessPool alloc] init];
+    webConfiguration.applicationNameForUserAgent = [NSString stringWithFormat:@""];
+
+
+    WSWKScriptMessageHandler *messageHandler = [WSWKScriptMessageHandler buildMessageHandleWithReceiveWSDataHandler:receiveWSDataHandler];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"bridge"];
+    [webConfiguration.userContentController addScriptMessageHandler:messageHandler name:@"nativelog"];
+
+    WSWebView *webView = [[WSWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:webConfiguration];
+    [parentView addSubview:webView];
+    webView.navigationDelegate = webView;
+    return webView;
+}
+- (void)dealloc {
+    WLLog(@"===========dealloc WSWebView ");
+}
+
+// 页面加载完成之后调用
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    WLLog(@"===========ws webview didFinishNavigation : %@",webView.URL.absoluteString);
+}
 @end
 
 

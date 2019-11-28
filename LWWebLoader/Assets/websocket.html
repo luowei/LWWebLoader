@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style>
+		pre {font-size: 5px; height: 120px;}
+	</style>
+	<!--<script src="jquery-1.9.0.min.js"></script>-->
+	<script type="text/javascript">
+
+        // function ab2str(buf) {
+        //     return String.fromCharCode.apply(null, new Uint16Array(buf));
+        // }
+        // function str2ab(str) {
+        //     var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
+        //     var bufView = new Uint16Array(buf);
+        //     for (var i=0, strLen=str.length; i < strLen; i++) {
+        //         bufView[i] = str.charCodeAt(i);
+        //     }
+        //     return buf;
+        // }
+		//
+        // function utf8AbFromString(str) {
+        //     var strUtf8 = unescape(encodeURIComponent(str));
+        //     var ab = new Uint8Array(strUtf8.length);
+        //     for (var i = 0; i < strUtf8.length; i++) {
+        //         ab[i] = strUtf8.charCodeAt(i);
+        //     }
+        //     return ab;
+        // }
+        // function stringFromUtf8Ab(ab) {
+        //     return decodeURIComponent(escape(String.fromCharCode.apply(null, ab)));
+        // }
+
+        function arrayBufferToBase64( buffer ) {
+            let binary = '';
+            let bytes = new Uint8Array( buffer );
+            let len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode( bytes[ i ] );
+            }
+            return window.btoa( binary );
+        }
+
+        function base64ToUint8Array(base64) {
+            let binary_string = window.atob(base64);
+            let len = binary_string.length;
+            let bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        function base64ToArrayBuffer(base64) {
+            let bytes = base64ToUint8Array(base64);
+            return bytes.buffer;
+        }
+
+        function concatTypedArrays(a, b) { // a, b TypedArray of same type
+            var c = new (a.constructor)(a.length + b.length);
+            c.set(a, 0);
+            c.set(b, a.length);
+            return c;
+        }
+
+        var MessageType = {
+            Raw: 0,
+            Hello: 1,
+            HeartBeat: 2,
+            StreamStart: 3,
+            Streaming: 4,
+            StreamEnd: 5,
+            String: 6,
+            Data: 7
+        };
+
+        let socket = (function () {
+
+            var reconnectAttempts = 0;
+            var reConnnectTimeInterval = [1, 2, 4, 8, 16];
+            var websocket;
+
+            function ws_connect() {
+
+                websocket = new WebSocket('ws://localhost:11335/service');
+                websocket.binaryType = 'arraybuffer';
+
+                websocket.onopen = function () {
+                    // 建立连接，将重试次数重置
+                    reconnectAttempts = 0;
+                    console.log("socket opened");
+                    window.webkit.messageHandlers.nativelog.postMessage('websocket 连接打开成功');
+
+                    sendHeartBeat();
+                };
+
+                websocket.onerror = function () {
+                    window.webkit.messageHandlers.nativelog.postMessage('websocket 连接打开失败');
+                };
+
+                websocket.onclose = function () {
+                    window.webkit.messageHandlers.nativelog.postMessage('websocket 连接关闭');
+                    response = {
+                        type: 'ws_closed',
+                        value: ''
+                    };
+                    window.webkit.messageHandlers.bridge.postMessage(response);
+                    // 重连
+                    reConnect()
+                };
+
+
+                websocket.onmessage = function (message) {
+                    let data = message.data;
+                    if(typeof data === 'string' || data instanceof String){
+                        response = {
+                            type: 'plaintext',
+                            value: data
+                        };
+                        window.webkit.messageHandlers.bridge.postMessage(response);
+
+					}else if (data instanceof ArrayBuffer) {
+                        let response = {};
+                        try {
+                            let headerLen = 4;  // 前4个字节messageType
+                            let msgTypeBuf = data.slice(0, headerLen);
+
+                            let dv = new DataView(msgTypeBuf, 0);
+                            let messageType = dv.getUint32(0, true);  // 小端
+
+                            let len = data.byteLength;
+                            let dataBuf = data.slice(headerLen, len);
+
+                            //receive data 处理
+                            // console.log('=== messageType:' + messageType + ' text:' + ab2str(dataBuf));
+
+                            switch (messageType) {
+                                case MessageType.Hello: {
+                                    window.webkit.messageHandlers.nativelog.postMessage('websocket 收到hello消息，连接已建立');
+                                    response = {
+                                        type: 'ws_opened',
+                                        value: ''
+                                    };
+                                    window.webkit.messageHandlers.bridge.postMessage(response);
+                                    break;
+                                }
+                                case MessageType.HeartBeat: {
+                                    window.webkit.messageHandlers.nativelog.postMessage('websocket 收到heartBeat消息');
+                                    break;
+                                }
+                                case MessageType.String: {
+                                    response = {
+                                        type: 'plaintext',
+                                        value: arrayBufferToBase64(dataBuf)
+                                    };
+                                    window.webkit.messageHandlers.bridge.postMessage(response);
+                                    break;
+                                }
+                                case MessageType.Data: {
+                                    response = {
+                                        type: 'b64text',
+                                        value: arrayBufferToBase64(dataBuf)
+                                    };
+                                    window.webkit.messageHandlers.bridge.postMessage(response);
+                                    break;
+                                }
+                                case MessageType.StreamStart: {
+                                    response = {
+                                        type: 'b64streamstart',
+                                        value: ''
+                                    };
+                                    window.webkit.messageHandlers.bridge.postMessage(response);
+                                    break;
+                                }
+                                case MessageType.StreamEnd: {
+                                    response = {
+                                        type: 'b64streamend',
+                                        value: ''
+                                    };
+                                    window.webkit.messageHandlers.bridge.postMessage(response);
+                                    break;
+                                }
+                                case MessageType.Streaming: {
+                                    response = {
+                                        type: 'b64streaming',
+                                        value: arrayBufferToBase64(dataBuf)
+                                    };
+                                    window.webkit.messageHandlers.bridge.postMessage(response);
+                                    break;
+                                }
+                                default: {
+                                    break;
+                                }
+
+                            }
+
+                        } catch (e) {
+                            response = {
+                                type: 'error',
+                                value: e
+                            };
+                            window.webkit.messageHandlers.bridge.postMessage(response);
+                        }
+                    }
+
+                    // // 收到数据，直接发回去，为了测试
+                    // websocket.send(data)
+
+                }
+
+            }
+
+            // 重连
+            function reConnect() {
+                window.webkit.messageHandlers.nativelog.postMessage('websocket 重新连接...');
+                reconnectAttempts++;
+                if (reconnectAttempts > reConnnectTimeInterval.length) {
+                    return;
+                }
+
+                var timeOut = reConnnectTimeInterval[reconnectAttempts - 1];
+
+                setTimeout(function () {
+                    ws_connect();
+                }, timeOut)
+            }
+
+            var timeIntervalID;
+            function sendHeartBeat() {
+                if (timeIntervalID) {
+                    clearInterval(timeIntervalID);
+                }
+
+                timeIntervalID = window.setInterval(function () {
+                    if (websocket) {
+                        websocket.send(
+                            JSON.stringify({'messageType': MessageType.HeartBeat})
+                        );
+                    }
+                }, 5000);
+            }
+
+
+            return {
+                connect: function() {
+                    ws_connect();
+                },
+                sendString: function(body='') {
+                    websocket.send(
+                        JSON.stringify({'messageType': MessageType.String, 'messageBody': body })
+                    );
+                },
+                sendData: function(body=null) {
+                    let data = base64ToArrayBuffer(body);
+                    // websocket.send(
+                    //     JSON.stringify({'messageType': MessageType.Data, 'messageBody': data })
+                    // );
+                    let sendBody = concatTypedArrays(
+                        new Uint8Array([MessageType.Data,0,0,0]),
+                        new Uint8Array(data.buffer || data)
+					);
+					websocket.send(sendBody)
+                },
+                sendStreamStart: function() {
+                    // websocket.send(
+                    //     JSON.stringify({'messageType': MessageType.StreamStart, 'messageBody': null })
+                    // );
+					let data = new Uint8Array([MessageType.StreamStart,0,0,0]);
+                    websocket.send(data.buffer)
+                },
+                sendStreaming: function(body=null) {
+                    let data = base64ToArrayBuffer(body);
+                    // websocket.send(
+                    //     JSON.stringify({'messageType': MessageType.Streaming, 'messageBody': data })
+                    // );
+                    let sendBody = concatTypedArrays(
+                        new Uint8Array([MessageType.Streaming,0,0,0]),
+                        new Uint8Array(data.buffer || data)
+                    );
+                    websocket.send(sendBody)
+                },
+                sendStreamEnd: function() {
+                    // websocket.send(
+                    //     JSON.stringify({'messageType': MessageType.StreamEnd, 'messageBody': null })
+                    // );
+                    let data = new Uint8Array([MessageType.StreamEnd,0,0,0]);
+                    websocket.send(data.buffer)
+                },
+            };
+
+        })();
+
+
+
+	</script>
+</head>
+
+
+<body>
+<h2>WebSockets echo client with push support</h2>
+<form>
+	<input type="text" placeholder="message to be echoed"/>
+	<button>Send</button>
+</form>
+<h4>Echo result :</h4>
+<p></p>
+<h4>Pushed messages :</h4>
+<pre></pre>
+</body>
+</html>

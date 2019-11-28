@@ -56,7 +56,8 @@ typedef NS_OPTIONS(NSUInteger, WLHanderBodyType) {
     BodyType_StreamStart = 4,
     BodyType_Streaming = 5,
     BodyType_StreamEnd = 6,
-    BodyType_Other = 7,
+    BodyType_WSOpened = 7,
+    BodyType_WSClosed = 8,
 };
 
 
@@ -83,7 +84,18 @@ typedef NS_OPTIONS(NSUInteger, WLHanderBodyType) {
                              postData:(NSDictionary *)postData
                            uploadData:(NSData *)uploadData;
 //- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView jsExcuteCompletionHandler:(void (^)(id, NSError *error))jsExcuteCompletionHandler;
-- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(BOOL,WLHanderBody *_Nonnull,NSError *))dataLoadCompletionHandler;
+- (void)evaluateWithBody:(WLEvaluateBody *)evaluateBody parentView:(UIView *)parentView dataLoadCompletionHandler:(void (^)(WLHanderBody *_Nonnull,NSError *))dataLoadCompletionHandler;
+
+-(void)startWSWebViewWithParentView:(UIView *)parentView receiveWSDataHandler:(void (^)(WLHanderBody *_Nonnull data,NSError *error))receiveWSDataHandler;
+
+-(void)removeWSWebView;
+
+-(void)wsConnect;
+-(void)wsSendData:(NSData *)data;
+-(void)wsSendString:(NSString *)string;
+-(void)wsSendStreamStart;
+-(void)wsSendStreaming:(NSData *)data;
+-(void)wsSendStreamEnd;
 
 @end
 
@@ -92,7 +104,14 @@ typedef NS_OPTIONS(NSUInteger, WLHanderBodyType) {
 
 + (instancetype)buildWebViewWithEvaluateBody:(WLEvaluateBody *_Nonnull)evaluateBody
                                   parentView:(UIView *_Nonnull)parentView
-                   dataLoadCompletionHandler:(void (^)(BOOL, WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler
+                   dataLoadCompletionHandler:(void (^)(WLHanderBody *_Nonnull, NSError *))dataLoadCompletionHandler
                          jsCompletionHandler:(void (^)(id, NSError *))jsCompletionHandler;
+
+@end
+
+
+@interface WSWebView : WKWebView <WKNavigationDelegate>
+
++ (instancetype)buildWebViewWithParentView:(UIView *)parentView receiveWSDataHandler:(void (^)(WLHanderBody *_Nonnull data,NSError *error))receiveWSDataHandler;
 
 @end

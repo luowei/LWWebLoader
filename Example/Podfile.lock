@@ -1,16 +1,21 @@
 PODS:
   - LWWebLoader (0.1.0)
+  - LWWebSocket (1.0.0)
 
 DEPENDENCIES:
   - LWWebLoader (from `../`)
+  - LWWebSocket (from `../../LWWebSocket/`)
 
 EXTERNAL SOURCES:
   LWWebLoader:
     :path: "../"
+  LWWebSocket:
+    :path: "../../LWWebSocket/"
 
 SPEC CHECKSUMS:
   LWWebLoader: ef2d258f437a691c75e856ae7e38a536f798aeb2
+  LWWebSocket: bc2edbb07812b7388f720dbcdf327a195ce044c1
 
-PODFILE CHECKSUM: ed42863d8219b5a2aa7f8230b0cdf4cad5941105
+PODFILE CHECKSUM: fdf3ff6cf9847a1010c3f8bb4d97010f4ec68539
 
 COCOAPODS: 1.8.3
