@@ -30,8 +30,9 @@ LWWebLoader，一个基于WKWebView的数据加载器，通过WKWebView的独立
 
   s.ios.deployment_target = '9.0'
 
-  s.source_files = 'LWWebLoader/Classes/**/*'
-  
+  s.source_files = 'LWWebLoader/Classes/**/*.{h,m}'
+  s.exclude_files = 'LWWebLoader/Classes/**/*.swift'
+
   s.resource_bundles = {
     'LWWebLoader' => ['LWWebLoader/Assets/**/*']
   }
